@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -28,9 +28,11 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import Header from "@/components/header";
-import ApplicationCard from "@/components/application-card";
 import { JobListing, Application } from "@shared/schema";
-import { Loader2, Search, X } from "lucide-react";
+import { Loader2, Search, X, LineChart } from "lucide-react";
+import StoreLocationAutocomplete from "@/components/store-location-autocomplete";
+import JobTemplateSelector from "@/components/job-template-selector";
+import DashboardCharts from "@/components/dashboard-charts";
 
 // Job creation schema
 const createJobSchema = z.object({
@@ -54,11 +56,9 @@ export default function FranchiseeDashboard() {
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState("jobListings");
   const [jobStatusFilter, setJobStatusFilter] = useState("all");
-  const [selectedJobFilter, setSelectedJobFilter] = useState<number | "all">("all");
-  const [applicationStatusFilter, setApplicationStatusFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [jobSortOrder, setJobSortOrder] = useState<"newest" | "oldest" | "applications">("newest");
-  const [applicationSortOrder, setApplicationSortOrder] = useState<"newest" | "oldest" | "name">("newest");
+  const [showCharts, setShowCharts] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Queries for job listings
@@ -141,28 +141,13 @@ export default function FranchiseeDashboard() {
       });
     },
   });
-
-  // Update application status mutation
-  const updateApplicationMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: number; status: string }) => {
-      const res = await apiRequest("PATCH", `/api/applications/${id}`, { status });
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/my-applications"] });
-      toast({
-        title: "Application Updated",
-        description: "The application status has been updated",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: error.message || "There was an error updating the application",
-        variant: "destructive",
-      });
-    },
-  });
+  
+  // Auto-show charts when data is loaded
+  useEffect(() => {
+    if (jobs?.length && applications?.length && !isJobsLoading && !isApplicationsLoading) {
+      setShowCharts(true);
+    }
+  }, [jobs, applications, isJobsLoading, isApplicationsLoading]);
 
   // Submit job form
   const onSubmitJobForm = (data: CreateJobFormValues) => {
@@ -188,18 +173,6 @@ export default function FranchiseeDashboard() {
       }
     } else {
       updateJobMutation.mutate({ id: jobId, status: newStatus });
-    }
-  };
-
-  // Handle application status change with confirmation for sensitive actions
-  const handleApplicationStatusChange = (applicationId: number, newStatus: string) => {
-    // Add confirmation for sensitive status changes like rejection
-    if (newStatus === "rejected") {
-      if (window.confirm("Are you sure you want to reject this application? This action cannot be undone.")) {
-        updateApplicationMutation.mutate({ id: applicationId, status: newStatus });
-      }
-    } else {
-      updateApplicationMutation.mutate({ id: applicationId, status: newStatus });
     }
   };
 
@@ -241,30 +214,14 @@ export default function FranchiseeDashboard() {
     return 0;
   }) : [];
 
-  // Filter and sort applications based on job, status, and sort order
-  const filteredApplications = applications ? applications.filter(app => {
-    const matchesJob = selectedJobFilter === "all" || app.jobId === selectedJobFilter;
-    const matchesStatus = applicationStatusFilter === "all" || app.status === applicationStatusFilter;
-    return matchesJob && matchesStatus;
-  })
-  // Then sort the filtered applications
-  .sort((a, b) => {
-    if (applicationSortOrder === "newest") {
-      return new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime();
-    } else if (applicationSortOrder === "oldest") {
-      return new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime();
-    } else if (applicationSortOrder === "name") {
-      return `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
-    }
-    return 0;
-  }) : [];
+
 
   // Calculate dashboard stats
   const dashboardStats = {
     activeJobListings: jobs?.filter(job => job.status === "active").length || 0,
-    newApplications: applications?.filter(app => app.status === "submitted").length || 0,
-    underReview: applications?.filter(app => app.status === "under_review").length || 0,
     positionsFilled: jobs?.filter(job => job.status === "filled").length || 0,
+    totalApplications: applications?.length || 0,
+    acceptedApplicants: applications?.filter(app => app.status === "accepted").length || 0,
   };
 
   return (
@@ -285,23 +242,11 @@ export default function FranchiseeDashboard() {
             <h1 className="text-2xl font-bold text-neutral-800 mb-6">Job Management Dashboard</h1>
             
             {/* Dashboard Stats Cards - Improved for mobile responsiveness */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               <div className="bg-blue-50 rounded-lg p-4 border border-blue-100 transition-all hover:shadow-md">
                 <h3 className="text-blue-800 font-medium text-sm mb-1">Active Job Listings</h3>
                 <p className="text-2xl font-bold text-blue-900">
                   {isJobsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : dashboardStats.activeJobListings}
-                </p>
-              </div>
-              <div className="bg-green-50 rounded-lg p-4 border border-green-100 transition-all hover:shadow-md">
-                <h3 className="text-green-800 font-medium text-sm mb-1">New Applications</h3>
-                <p className="text-2xl font-bold text-green-900">
-                  {isApplicationsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : dashboardStats.newApplications}
-                </p>
-              </div>
-              <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-100 transition-all hover:shadow-md">
-                <h3 className="text-yellow-800 font-medium text-sm mb-1">Under Review</h3>
-                <p className="text-2xl font-bold text-yellow-900">
-                  {isApplicationsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : dashboardStats.underReview}
                 </p>
               </div>
               <div className="bg-purple-50 rounded-lg p-4 border border-purple-100 transition-all hover:shadow-md">
@@ -310,34 +255,44 @@ export default function FranchiseeDashboard() {
                   {isJobsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : dashboardStats.positionsFilled}
                 </p>
               </div>
+              <div className="bg-orange-50 rounded-lg p-4 border border-orange-100 transition-all hover:shadow-md">
+                <h3 className="text-orange-800 font-medium text-sm mb-1">Total Applications</h3>
+                <p className="text-2xl font-bold text-orange-900">
+                  {isApplicationsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : dashboardStats.totalApplications}
+                </p>
+              </div>
+              <div className="bg-green-50 rounded-lg p-4 border border-green-100 transition-all hover:shadow-md">
+                <h3 className="text-green-800 font-medium text-sm mb-1">Accepted Applicants</h3>
+                <p className="text-2xl font-bold text-green-900">
+                  {isApplicationsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : dashboardStats.acceptedApplicants}
+                </p>
+              </div>
             </div>
             
-            {/* Quick Stats Summary */}
-            {!isApplicationsLoading && !isJobsLoading && applications && applications.length > 0 && (
-              <div className="mt-6 bg-white rounded-lg border border-gray-200 p-4">
-                <h3 className="text-base font-medium text-neutral-800 mb-2">Application Metrics</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="flex items-center">
-                    <div className="w-2 h-2 rounded-full bg-blue-500 mr-2"></div>
-                    <span className="text-sm text-gray-700">
-                      {Math.round((applications.filter(a => a.status === "interviewed").length / applications.length) * 100)}% reached interview stage
-                    </span>
-                  </div>
-                  <div className="flex items-center">
-                    <div className="w-2 h-2 rounded-full bg-green-500 mr-2"></div>
-                    <span className="text-sm text-gray-700">
-                      {Math.round((applications.filter(a => a.status === "accepted").length / applications.length) * 100)}% of applicants accepted
-                    </span>
-                  </div>
-                  <div className="flex items-center">
-                    <div className="w-2 h-2 rounded-full bg-orange-500 mr-2"></div>
-                    <span className="text-sm text-gray-700">
-                      Average {Math.round(applications.length / (jobs?.length || 1))} applications per job
-                    </span>
-                  </div>
-                </div>
+            {/* Analytics Charts Toggle */}
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold text-neutral-800">Analytics Overview</h2>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setShowCharts(!showCharts)}
+                className="flex items-center gap-2"
+              >
+                <LineChart size={16} />
+                {showCharts ? "Hide Charts" : "Show Charts"}
+              </Button>
+            </div>
+            
+            {/* Dashboard Charts */}
+            {showCharts && (isJobsLoading || isApplicationsLoading) ? (
+              <div className="p-8 text-center">
+                <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+                <p className="mt-2 text-gray-500">Loading analytics data...</p>
               </div>
-            )}
+            ) : showCharts && jobs && applications ? (
+              <DashboardCharts jobs={jobs} applications={applications} />
+            ) : null}
+
           </div>
 
           {/* Tabs */}
@@ -350,12 +305,6 @@ export default function FranchiseeDashboard() {
                     className="data-[state=active]:text-[#ff7a00] data-[state=active]:border-[#ff7a00] py-4 px-6 font-medium data-[state=active]:border-b-2 data-[state=inactive]:text-gray-500 data-[state=inactive]:border-transparent rounded-none"
                   >
                     Job Listings
-                  </TabsTrigger>
-                  <TabsTrigger 
-                    value="applications"
-                    className="data-[state=active]:text-[#ff7a00] data-[state=active]:border-[#ff7a00] py-4 px-6 font-medium data-[state=active]:border-b-2 data-[state=inactive]:text-gray-500 data-[state=inactive]:border-transparent rounded-none"
-                  >
-                    Applications
                   </TabsTrigger>
                   <TabsTrigger 
                     value="createJob"
@@ -545,96 +494,7 @@ export default function FranchiseeDashboard() {
                 </div>
               </TabsContent>
 
-              {/* Tab Content: Applications */}
-              <TabsContent value="applications" className="p-0">
-                <div className="p-6 border-b border-gray-200">
-                  <div className="flex justify-between items-center flex-col sm:flex-row gap-3">
-                    <h2 className="text-xl font-semibold text-neutral-800">Job Applications</h2>
-                    <div className="flex space-x-2 flex-col sm:flex-row gap-2">
-                      <Select 
-                        value={selectedJobFilter === "all" ? "all" : String(selectedJobFilter)} 
-                        onValueChange={(value) => setSelectedJobFilter(value === "all" ? "all" : parseInt(value))}
-                      >
-                        <SelectTrigger className="w-[180px]">
-                          <SelectValue placeholder="Filter by job" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Jobs</SelectItem>
-                          {jobs?.map(job => (
-                            <SelectItem key={job.id} value={String(job.id)}>
-                              {job.title}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Select 
-                        value={applicationStatusFilter} 
-                        onValueChange={setApplicationStatusFilter}
-                      >
-                        <SelectTrigger className="w-[180px]">
-                          <SelectValue placeholder="Filter by status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Statuses</SelectItem>
-                          <SelectItem value="submitted">New</SelectItem>
-                          <SelectItem value="under_review">Under Review</SelectItem>
-                          <SelectItem value="interviewed">Interviewed</SelectItem>
-                          <SelectItem value="accepted">Accepted</SelectItem>
-                          <SelectItem value="rejected">Rejected</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Select
-                        value={applicationSortOrder}
-                        onValueChange={(value: "newest" | "oldest" | "name") => setApplicationSortOrder(value)}
-                      >
-                        <SelectTrigger className="w-[180px]">
-                          <SelectValue placeholder="Sort by" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="newest">Newest First</SelectItem>
-                          <SelectItem value="oldest">Oldest First</SelectItem>
-                          <SelectItem value="name">Name (A-Z)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </div>
 
-                <div className="divide-y divide-gray-200">
-                  {isApplicationsLoading || isJobsLoading ? (
-                    <div className="p-6 text-center">
-                      <Loader2 className="h-8 w-8 animate-spin mx-auto" />
-                      <p className="mt-2 text-gray-500">Loading applications...</p>
-                    </div>
-                  ) : applicationsError ? (
-                    <div className="p-6 text-center">
-                      <p className="text-red-500">Error loading applications</p>
-                    </div>
-                  ) : filteredApplications.length === 0 ? (
-                    <div className="p-6 text-center">
-                      <p className="text-gray-500">No applications found</p>
-                    </div>
-                  ) : (
-                    filteredApplications.map((application) => {
-                      // Find the job this application is for
-                      const job = jobs?.find(j => j.id === application.jobId);
-                      
-                      return job ? (
-                        <ApplicationCard
-                          key={application.id}
-                          application={{
-                            ...application,
-                            jobTitle: job.title,
-                            jobLocation: job.location,
-                          }}
-                          jobTitle={job.title}
-                          onStatusChange={(newStatus) => handleApplicationStatusChange(application.id, newStatus)}
-                        />
-                      ) : null;
-                    })
-                  )}
-                </div>
-              </TabsContent>
 
               {/* Tab Content: Create Job */}
               <TabsContent value="createJob" className="p-0">
@@ -689,7 +549,11 @@ export default function FranchiseeDashboard() {
                             <FormItem>
                               <FormLabel>Location*</FormLabel>
                               <FormControl>
-                                <Input placeholder="City, State" {...field} />
+                                <StoreLocationAutocomplete 
+                                  value={field.value}
+                                  onChange={field.onChange}
+                                  className="w-full"
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -760,10 +624,10 @@ export default function FranchiseeDashboard() {
                           <FormItem>
                             <FormLabel>Job Description*</FormLabel>
                             <FormControl>
-                              <Textarea 
-                                placeholder="Describe the job responsibilities and duties"
-                                className="min-h-[120px]"
-                                {...field}
+                              <JobTemplateSelector
+                                type="responsibilities"
+                                value={field.value}
+                                onChange={field.onChange}
                               />
                             </FormControl>
                             <FormMessage />
@@ -778,10 +642,10 @@ export default function FranchiseeDashboard() {
                           <FormItem>
                             <FormLabel>Job Requirements*</FormLabel>
                             <FormControl>
-                              <Textarea 
-                                placeholder="List the qualifications and skills required"
-                                className="min-h-[120px]"
-                                {...field}
+                              <JobTemplateSelector
+                                type="requirements"
+                                value={field.value}
+                                onChange={field.onChange}
                               />
                             </FormControl>
                             <FormMessage />

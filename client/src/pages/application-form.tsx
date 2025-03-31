@@ -193,7 +193,7 @@ export default function ApplicationForm() {
           <div className="bg-white rounded-lg shadow-md overflow-hidden mb-6 sm:mb-8">
             <div className="p-4 sm:p-6 bg-[#00703c] text-white">
               <h1 className="text-xl sm:text-2xl font-bold">{job.title}</h1>
-              <p className="mt-1 text-sm sm:text-base">{job.franchiseeName || "7-Eleven"} - {job.location}</p>
+              <p className="mt-1 text-sm sm:text-base">7-Eleven - {job.location}</p>
             </div>
             
             <Form {...form}>
@@ -299,11 +299,12 @@ export default function ApplicationForm() {
                       name="city"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-sm sm:text-base">City</FormLabel>
+                          <FormLabel className="text-sm sm:text-base">City/Municipality</FormLabel>
                           <FormControl>
                             <Input 
                               {...field} 
                               autoComplete="address-level2" 
+                              placeholder="City or municipality in Philippines"
                               className="h-10 sm:h-11 px-3" 
                             />
                           </FormControl>
@@ -317,12 +318,13 @@ export default function ApplicationForm() {
                       name="zipCode"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-sm sm:text-base">Zip Code</FormLabel>
+                          <FormLabel className="text-sm sm:text-base">Postal Code</FormLabel>
                           <FormControl>
                             <Input 
                               {...field} 
                               inputMode="numeric" 
-                              autoComplete="postal-code" 
+                              autoComplete="postal-code"
+                              placeholder="Philippine postal code"
                               className="h-10 sm:h-11 px-3" 
                             />
                           </FormControl>
@@ -561,7 +563,7 @@ export default function ApplicationForm() {
                             <FormLabel className="text-sm sm:text-base">Desired Hourly Pay</FormLabel>
                             <FormControl>
                               <Input 
-                                placeholder="$" 
+                                placeholder="₱" 
                                 inputMode="decimal"
                                 className="h-10 sm:h-11 px-3"
                                 {...field} 

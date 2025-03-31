@@ -67,6 +67,7 @@ export const insertJobListingSchema = baseJobSchema.pick({
 export const applications = pgTable("applications", {
   id: serial("id").primaryKey(),
   jobId: integer("job_id").notNull(), // Job listing ID
+  referenceId: text("reference_id").notNull().unique(), // Unique reference ID for tracking the application
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   email: text("email").notNull(),
@@ -91,6 +92,7 @@ const baseApplicationSchema = createInsertSchema(applications);
 // Create a modified schema with custom validation for dates
 export const insertApplicationSchema = baseApplicationSchema.pick({
   jobId: true,
+  referenceId: true,
   firstName: true,
   lastName: true,
   email: true,

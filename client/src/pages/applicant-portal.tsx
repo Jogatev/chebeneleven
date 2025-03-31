@@ -97,7 +97,7 @@ export default function ApplicantPortal() {
                   </label>
                   <Input
                     id="location"
-                    placeholder="City, state, or zip"
+                    placeholder="City or province in Philippines"
                     value={location}
                     onChange={(e) => setLocationFilter(e.target.value)}
                   />
