@@ -92,7 +92,6 @@ const baseApplicationSchema = createInsertSchema(applications);
 // Create a modified schema with custom validation for dates
 export const insertApplicationSchema = baseApplicationSchema.pick({
   jobId: true,
-  referenceId: true,
   firstName: true,
   lastName: true,
   email: true,
@@ -108,6 +107,8 @@ export const insertApplicationSchema = baseApplicationSchema.pick({
   desiredPay: true,
   status: true,
 }).extend({
+  // Make referenceId optional for client submissions (will be generated on server)
+  referenceId: z.string().optional(),
   // Allow startDate to be a Date or string and handle conversion
   startDate: z.union([
     z.date().optional(),
