@@ -10,6 +10,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { Application } from "@shared/schema";
+import ResumePreview from "@/components/resume-preview";
 
 interface ApplicationDetailsModalProps {
   application: Application & { jobTitle: string; jobLocation: string };
@@ -25,11 +26,6 @@ const statusLabels: Record<string, { label: string; color: string }> = {
   accepted: { label: "Accepted", color: "bg-green-500" },
   rejected: { label: "Rejected", color: "bg-red-500" },
 };
-
-// Placeholder -  This component needs to be implemented to handle resume preview and download with header/footer
-function ResumePreview({ resumeUrl, fileName, applicantName }: any) {
-  return <p>Resume Preview for {applicantName} ({fileName})</p>;
-}
 
 export default function ApplicationDetailsModal({
   application,
