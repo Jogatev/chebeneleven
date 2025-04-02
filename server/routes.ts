@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { setupAuth } from "./auth";
 import { insertJobListingSchema, insertApplicationSchema } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
+import { sendApplicationConfirmation, sendStatusUpdateEmail } from "./email-service";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up authentication routes (/api/register, /api/login, /api/logout, /api/user)
@@ -166,12 +167,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "This job is no longer accepting applications" });
       }
       
+      // Application will automatically get a reference ID in storage.createApplication
       const application = await storage.createApplication(parseResult.data);
       console.log("Application created successfully:", application);
       
       // Double check that the application was stored properly
       const allApplications = await storage.getApplications();
       console.log(`Total applications in storage: ${allApplications.length}`);
+      
+      // Send confirmation email with the reference ID
+      try {
+        const jobDetails = await storage.getJobById(application.jobId);
+        if (jobDetails) {
+          const emailResult = await sendApplicationConfirmation(
+            application,
+            jobDetails,
+            application.referenceId
+          );
+          console.log("Application confirmation email sent:", emailResult);
+        }
+      } catch (emailError) {
+        console.error("Error sending confirmation email:", emailError);
+        // Don't fail the request if email fails
+      }
       
       res.status(201).json(application);
     } catch (error) {
@@ -295,7 +313,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allApplications = await storage.getApplications();
       
       // Debug info about applications and matching
-      const debugInfo = {
+      const debugInfo: {
+        userId: number;
+        userJobs: any[];
+        userJobIds: number[];
+        allApplications: any[];
+        matchedApplications: any[];
+      } = {
         userId: userId,
         userJobs: userJobs,
         userJobIds: userJobIds,
@@ -304,7 +328,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       
       // Manual matching to debug the issue
-      const matchedApplications = [];
+      const matchedApps: any[] = [];
       
       for (const app of allApplications) {
         const appJobId = typeof app.jobId === 'string' ? parseInt(app.jobId) : app.jobId;
@@ -313,7 +337,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         if (userJobIds.includes(appJobId)) {
           console.log(`Match found: Application ${app.id} matches job ${appJobId}`);
-          matchedApplications.push({
+          matchedApps.push({
             ...app,
             matched: true,
             appJobId_type: typeof app.jobId,
@@ -324,7 +348,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      debugInfo.matchedApplications = matchedApplications;
+      debugInfo.matchedApplications = matchedApps;
       
       res.json(debugInfo);
     } catch (error) {
@@ -347,6 +371,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create a test application
       const testApplication = {
         jobId: jobId,
+        referenceId: `TEST-${Date.now()}`, // Add a reference ID for testing
         firstName: "Test",
         lastName: "Applicant",
         email: "test@example.com",
@@ -446,6 +471,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const updatedApplication = await storage.updateApplication(applicationId, { status: req.body.status });
+      
+      if (!updatedApplication) {
+        return res.status(404).json({ error: "Failed to update application" });
+      }
+
+      // If application is accepted, mark the job as filled
+      if (req.body.status === "accepted") {
+        await storage.updateJob(job.id, { status: "filled" });
+      }
+      
+      // Send status update email notification
+      try {
+        // Only send emails for significant status changes (not every review status)
+        const significantStatuses = ["under_review", "interviewed", "accepted", "rejected"];
+        if (significantStatuses.includes(req.body.status)) {
+          const emailResult = await sendStatusUpdateEmail(
+            updatedApplication,
+            job,
+            updatedApplication.referenceId,
+            req.body.status
+          );
+          console.log(`Status update email sent for application ${applicationId}:`, emailResult);
+        }
+      } catch (emailError) {
+        console.error("Error sending status update email:", emailError);
+        // Don't fail the request if email fails
+      }
+      
       res.json(updatedApplication);
     } catch (error) {
       console.error("Error updating application:", error);

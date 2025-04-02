@@ -67,6 +67,7 @@ export const insertJobListingSchema = baseJobSchema.pick({
 export const applications = pgTable("applications", {
   id: serial("id").primaryKey(),
   jobId: integer("job_id").notNull(), // Job listing ID
+  referenceId: text("reference_id").notNull().unique(), // Unique reference ID for tracking the application
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   email: text("email").notNull(),
@@ -78,9 +79,15 @@ export const applications = pgTable("applications", {
   experience: text("experience"),
   education: text("education"),
   coverLetter: text("cover_letter"),
-  availableShifts: json("available_shifts").$type<string[]>().default([]),
+  workAvailability: json("work_availability").$type<{
+    holidayWork: boolean;
+    weekdayWork: boolean;
+    weekendWork: boolean;
+    morningShift: boolean;
+    afternoonShift: boolean;
+    nightShift: boolean;
+  }>(),
   startDate: timestamp("start_date"),
-  desiredPay: text("desired_pay"),
   status: text("status").notNull().default("submitted"), // submitted, under_review, interviewed, accepted, rejected
   submittedAt: timestamp("submitted_at").defaultNow().notNull(),
 });
@@ -103,9 +110,10 @@ export const insertApplicationSchema = baseApplicationSchema.pick({
   education: true,
   coverLetter: true,
   availableShifts: true,
-  desiredPay: true,
   status: true,
 }).extend({
+  // Make referenceId optional for client submissions (will be generated on server)
+  referenceId: z.string().optional(),
   // Allow startDate to be a Date or string and handle conversion
   startDate: z.union([
     z.date().optional(),

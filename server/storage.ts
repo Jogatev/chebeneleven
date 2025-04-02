@@ -11,7 +11,9 @@ import {
 } from "@shared/schema";
 import session from "express-session";
 import createMemoryStore from "memorystore";
+import { v4 as uuidv4 } from 'uuid';
 
+// Create the memory store
 const MemoryStore = createMemoryStore(session);
 
 // Interface for all storage operations
@@ -43,7 +45,7 @@ export interface IStorage {
   getApplicationNote(applicationId: number): Promise<string | undefined>;
   
   // Session store for authentication
-  sessionStore: session.SessionStore;
+  sessionStore: any;
 }
 
 // In-memory implementation of the storage interface
@@ -55,7 +57,7 @@ export class MemStorage implements IStorage {
   currentUserId: number;
   currentJobId: number;
   currentApplicationId: number;
-  sessionStore: session.SessionStore;
+  sessionStore: any;
 
   constructor() {
     this.users = new Map();
@@ -114,7 +116,7 @@ export class MemStorage implements IStorage {
       ...insertJob, 
       id, 
       createdAt: now,
-      tags: insertJob.tags || []
+      tags: Array.isArray(insertJob.tags) ? insertJob.tags : [] as string[]
     };
     this.jobs.set(id, job);
     return job;
@@ -131,6 +133,14 @@ export class MemStorage implements IStorage {
 
   async deleteJob(id: number): Promise<boolean> {
     return this.jobs.delete(id);
+  }
+
+  // Helper method to generate application reference IDs
+  private generateReferenceId(): string {
+    // Format: SEV-YYYY-XXXXX, where YYYY is the current year and XXXXX is a random string
+    const year = new Date().getFullYear();
+    const randomPart = uuidv4().substring(0, 5).toUpperCase();
+    return `SEV-${year}-${randomPart}`;
   }
 
   // Application methods
@@ -223,21 +233,25 @@ export class MemStorage implements IStorage {
       ? parseInt(insertApplication.jobId) 
       : insertApplication.jobId;
     
-    console.log(`Creating application with jobId: ${jobId}, type: ${typeof jobId}`);
+    // Generate a unique reference ID for the application
+    const referenceId = insertApplication.referenceId || this.generateReferenceId();
+    
+    console.log(`Creating application with jobId: ${jobId}, referenceId: ${referenceId}`);
     
     const application: Application = { 
       ...insertApplication, 
       id, 
       jobId, // Make sure jobId is a number
+      referenceId, // Add the reference ID
       submittedAt: now,
-      availableShifts: insertApplication.availableShifts || []
+      availableShifts: Array.isArray(insertApplication.availableShifts) ? insertApplication.availableShifts : [] as string[]
     };
     
     this.applications.set(id, application);
     
     // Double-check what's stored
     const storedApp = this.applications.get(id);
-    console.log(`Stored application jobId: ${storedApp?.jobId}, type: ${typeof storedApp?.jobId}`);
+    console.log(`Stored application jobId: ${storedApp?.jobId}, referenceId: ${storedApp?.referenceId}`);
     
     return application;
   }
