@@ -18,7 +18,7 @@ export default function FileUpload({
   onFileUpload,
   onFileUploadError,
   isUploading = false,
-  accept = ".pdf,.doc,.docx",
+  accept = ".pdf,.doc,.docx,.wps",
   maxSize = 5, // 5MB default
   className,
   value,
@@ -55,11 +55,29 @@ export default function FileUpload({
   };
 
   const handleFile = (file: File) => {
-    // Validate file type
-    const fileType = file.name.split('.').pop()?.toLowerCase();
-    const validTypes = accept.split(',').map(type => type.replace('.', '').trim());
+    // Validate file type by extension and MIME type
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+    const acceptableExtensions = accept.split(',').map(type => 
+      type.trim().startsWith('.') ? type.trim().substring(1) : type.trim()
+    );
     
-    if (!validTypes.includes(fileType || '')) {
+    // List of valid MIME types, including WPS
+    const validMimeTypes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-works',
+      'application/wps-office.pdf',
+      'application/wps-office.doc',
+      'application/wps-office.docx',
+      'application/kswps'
+    ];
+    
+    // Check if file extension or MIME type is valid
+    const isValidExtension = acceptableExtensions.includes(fileExtension || '');
+    const isValidMimeType = validMimeTypes.includes(file.type) || file.type.includes('pdf');
+    
+    if (!isValidExtension && !isValidMimeType) {
       onFileUploadError(`Invalid file type. Please upload ${accept} files.`);
       return;
     }
@@ -78,6 +96,11 @@ export default function FileUpload({
     fileInputRef.current?.click();
   };
 
+  // Display format for the accepted files
+  const getDisplayAccept = () => {
+    return accept.split(',').join(', ');
+  };
+
   return (
     <div
       className={cn(
@@ -94,7 +117,7 @@ export default function FileUpload({
         type="file"
         ref={fileInputRef}
         onChange={handleFileChange}
-        accept={accept}
+        accept="application/pdf,.pdf,application/msword,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx,application/vnd.ms-works,.wps,application/wps-office.pdf,application/wps-office.doc,application/wps-office.docx,application/kswps"
         capture={isMobile ? "environment" : undefined}
         className="hidden"
       />
@@ -129,7 +152,7 @@ export default function FileUpload({
             </>
           )}
           <p className="text-xs text-muted-foreground mt-1">
-            {accept.split(',').join(', ')} files up to {maxSize}MB
+            {getDisplayAccept()} files up to {maxSize}MB
           </p>
         </div>
       )}
