@@ -18,7 +18,7 @@ export default function FileUpload({
   onFileUpload,
   onFileUploadError,
   isUploading = false,
-  accept = ".pdf,.doc,.docx",
+  accept = "application/pdf,.pdf,.doc,.docx,application/vnd.ms-word,application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   maxSize = 5, // 5MB default
   className,
   value,
@@ -56,10 +56,14 @@ export default function FileUpload({
 
   const handleFile = (file: File) => {
     // Validate file type
-    const fileType = file.name.split('.').pop()?.toLowerCase();
-    const validTypes = accept.split(',').map(type => type.replace('.', '').trim());
+    const validTypes = [
+      'pdf', 'doc', 'docx',
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
     
-    if (!validTypes.includes(fileType || '')) {
+    if (!validTypes.includes(file.type) && !validTypes.includes(file.name.split('.').pop()?.toLowerCase() || '')) {
       onFileUploadError(`Invalid file type. Please upload ${accept} files.`);
       return;
     }

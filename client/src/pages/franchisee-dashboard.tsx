@@ -9,17 +9,17 @@ import { z } from "zod";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
+import {
   Form,
   FormControl,
   FormField,
   FormItem,
   FormLabel,
-  FormMessage 
+  FormMessage
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -27,6 +27,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox"; // Added import for Checkbox
 import Header from "@/components/header";
 import { JobListing, Application } from "@shared/schema";
 import { Loader2, Search, X, LineChart } from "lucide-react";
@@ -60,10 +61,21 @@ export default function FranchiseeDashboard() {
   const [jobSortOrder, setJobSortOrder] = useState<"newest" | "oldest" | "applications">("newest");
   const [showCharts, setShowCharts] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [selectedJobFilter, setSelectedJobFilter] = useState("all"); // Added state for job filter
+  const [applicationStatusFilter, setApplicationStatusFilter] = useState("all"); // Added state for application status filter
+  const [workAvailabilityFilter, setWorkAvailabilityFilter] = useState({ // Added state for work availability filter
+    holidayWork: false,
+    weekdayWork: false,
+    weekendWork: false,
+    morningShift: false,
+    afternoonShift: false,
+    nightShift: false,
+  });
+
 
   // Queries for job listings
-  const { 
-    data: jobs, 
+  const {
+    data: jobs,
     isLoading: isJobsLoading,
     error: jobsError
   } = useQuery<JobListing[]>({
@@ -141,7 +153,7 @@ export default function FranchiseeDashboard() {
       });
     },
   });
-  
+
   // Auto-show charts when data is loaded
   useEffect(() => {
     if (jobs?.length && applications?.length && !isJobsLoading && !isApplicationsLoading) {
@@ -187,7 +199,7 @@ export default function FranchiseeDashboard() {
     if (jobStatusFilter !== "all" && job.status !== jobStatusFilter) {
       return false;
     }
-    
+
     // Then filter by search query if one exists
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -197,22 +209,22 @@ export default function FranchiseeDashboard() {
         job.location.toLowerCase().includes(query)
       );
     }
-    
+
     return true;
   })
-  // Then sort the filtered jobs
-  .sort((a, b) => {
-    if (jobSortOrder === "newest") {
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    } else if (jobSortOrder === "oldest") {
-      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-    } else if (jobSortOrder === "applications") {
-      const aCount = applications?.filter(app => app.jobId === a.id).length || 0;
-      const bCount = applications?.filter(app => app.jobId === b.id).length || 0;
-      return bCount - aCount;
-    }
-    return 0;
-  }) : [];
+    // Then sort the filtered jobs
+    .sort((a, b) => {
+      if (jobSortOrder === "newest") {
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      } else if (jobSortOrder === "oldest") {
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      } else if (jobSortOrder === "applications") {
+        const aCount = applications?.filter(app => app.jobId === a.id).length || 0;
+        const bCount = applications?.filter(app => app.jobId === b.id).length || 0;
+        return bCount - aCount;
+      }
+      return 0;
+    }) : [];
 
 
 
@@ -226,8 +238,8 @@ export default function FranchiseeDashboard() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Header 
-        title="Franchisee Dashboard" 
+      <Header
+        title="Franchisee Dashboard"
         showBackButton={false}
         showLogout={true}
         onLogout={handleLogout}
@@ -240,7 +252,7 @@ export default function FranchiseeDashboard() {
           {/* Dashboard Overview */}
           <div className="bg-white rounded-lg shadow-md p-6 mb-8">
             <h1 className="text-2xl font-bold text-neutral-800 mb-6">Job Management Dashboard</h1>
-            
+
             {/* Dashboard Stats Cards - Improved for mobile responsiveness */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               <div className="bg-blue-50 rounded-lg p-4 border border-blue-100 transition-all hover:shadow-md">
@@ -268,12 +280,12 @@ export default function FranchiseeDashboard() {
                 </p>
               </div>
             </div>
-            
+
             {/* Analytics Charts Toggle */}
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-semibold text-neutral-800">Analytics Overview</h2>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="sm"
                 onClick={() => setShowCharts(!showCharts)}
                 className="flex items-center gap-2"
@@ -282,7 +294,7 @@ export default function FranchiseeDashboard() {
                 {showCharts ? "Hide Charts" : "Show Charts"}
               </Button>
             </div>
-            
+
             {/* Dashboard Charts */}
             {showCharts && (isJobsLoading || isApplicationsLoading) ? (
               <div className="p-8 text-center">
@@ -300,13 +312,13 @@ export default function FranchiseeDashboard() {
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <div className="border-b border-gray-200">
                 <TabsList className="flex rounded-none bg-transparent h-auto border-b border-b-transparent">
-                  <TabsTrigger 
+                  <TabsTrigger
                     value="jobListings"
                     className="data-[state=active]:text-[#ff7a00] data-[state=active]:border-[#ff7a00] py-4 px-6 font-medium data-[state=active]:border-b-2 data-[state=inactive]:text-gray-500 data-[state=inactive]:border-transparent rounded-none"
                   >
                     Job Listings
                   </TabsTrigger>
-                  <TabsTrigger 
+                  <TabsTrigger
                     value="createJob"
                     className="data-[state=active]:text-[#ff7a00] data-[state=active]:border-[#ff7a00] py-4 px-6 font-medium data-[state=active]:border-b-2 data-[state=inactive]:text-gray-500 data-[state=inactive]:border-transparent rounded-none"
                   >
@@ -321,8 +333,8 @@ export default function FranchiseeDashboard() {
                   <div className="flex justify-between items-center flex-col sm:flex-row gap-3">
                     <h2 className="text-xl font-semibold text-neutral-800">Your Job Listings</h2>
                     <div className="flex flex-col sm:flex-row gap-2">
-                      <Select 
-                        value={jobStatusFilter} 
+                      <Select
+                        value={jobStatusFilter}
                         onValueChange={setJobStatusFilter}
                       >
                         <SelectTrigger className="w-[180px]">
@@ -335,7 +347,7 @@ export default function FranchiseeDashboard() {
                           <SelectItem value="closed">Closed</SelectItem>
                         </SelectContent>
                       </Select>
-                      
+
                       <Select
                         value={jobSortOrder}
                         onValueChange={(value: "newest" | "oldest" | "applications") => setJobSortOrder(value)}
@@ -417,8 +429,8 @@ export default function FranchiseeDashboard() {
                   ) : (
                     <>
                       {filteredJobs.map((job) => (
-                        <div 
-                          key={job.id} 
+                        <div
+                          key={job.id}
                           className="p-6 hover:bg-neutral-100 transition-colors cursor-pointer"
                           onClick={() => setLocation(`/job/${job.id}`)}
                         >
@@ -450,21 +462,31 @@ export default function FranchiseeDashboard() {
                               </div>
                             </div>
                             <div className="flex flex-col sm:flex-row gap-2 mt-4 sm:mt-0" onClick={(e) => e.stopPropagation()}>
-
                               {job.status === "active" ? (
-                                <Button 
-                                  variant="outline" 
+                                <Button
+                                  variant="outline"
                                   className="border-gray-300"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     handleJobStatusChange(job.id, "closed");
                                   }}
                                 >
-                                  Close
+                                  Close Position
+                                </Button>
+                              ) : job.status === "filled" ? (
+                                <Button
+                                  variant="outline"
+                                  className="border-gray-300"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleJobStatusChange(job.id, "closed");
+                                  }}
+                                >
+                                  Close Position
                                 </Button>
                               ) : (
-                                <Button 
-                                  variant="outline" 
+                                <Button
+                                  variant="outline"
                                   className="border-gray-300"
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -500,7 +522,7 @@ export default function FranchiseeDashboard() {
               <TabsContent value="createJob" className="p-0">
                 <div className="p-6">
                   <h2 className="text-xl font-semibold text-neutral-800 mb-6">Create New Job Listing</h2>
-                  
+
                   <Form {...jobForm}>
                     <form onSubmit={jobForm.handleSubmit(onSubmitJobForm)} className="space-y-6">
                       <div className="grid md:grid-cols-2 gap-6">
@@ -517,7 +539,7 @@ export default function FranchiseeDashboard() {
                             </FormItem>
                           )}
                         />
-                        
+
                         <FormField
                           control={jobForm.control}
                           name="jobType"
@@ -541,7 +563,7 @@ export default function FranchiseeDashboard() {
                             </FormItem>
                           )}
                         />
-                        
+
                         <FormField
                           control={jobForm.control}
                           name="location"
@@ -549,7 +571,7 @@ export default function FranchiseeDashboard() {
                             <FormItem>
                               <FormLabel>Location*</FormLabel>
                               <FormControl>
-                                <StoreLocationAutocomplete 
+                                <StoreLocationAutocomplete
                                   value={field.value}
                                   onChange={field.onChange}
                                   className="w-full"
@@ -559,7 +581,7 @@ export default function FranchiseeDashboard() {
                             </FormItem>
                           )}
                         />
-                        
+
                         <FormField
                           control={jobForm.control}
                           name="department"
@@ -583,7 +605,7 @@ export default function FranchiseeDashboard() {
                             </FormItem>
                           )}
                         />
-                        
+
                         <FormField
                           control={jobForm.control}
                           name="payRange"
@@ -597,7 +619,7 @@ export default function FranchiseeDashboard() {
                             </FormItem>
                           )}
                         />
-                        
+
                         <FormField
                           control={jobForm.control}
                           name="closingDate"
@@ -605,8 +627,8 @@ export default function FranchiseeDashboard() {
                             <FormItem>
                               <FormLabel>Closing Date</FormLabel>
                               <FormControl>
-                                <Input 
-                                  type="date" 
+                                <Input
+                                  type="date"
                                   {...field}
                                   value={typeof field.value === 'string' ? field.value : format(new Date(field.value || Date.now()), "yyyy-MM-dd")}
                                 />
@@ -616,7 +638,7 @@ export default function FranchiseeDashboard() {
                           )}
                         />
                       </div>
-                      
+
                       <FormField
                         control={jobForm.control}
                         name="description"
@@ -634,7 +656,7 @@ export default function FranchiseeDashboard() {
                           </FormItem>
                         )}
                       />
-                      
+
                       <FormField
                         control={jobForm.control}
                         name="requirements"
@@ -652,7 +674,7 @@ export default function FranchiseeDashboard() {
                           </FormItem>
                         )}
                       />
-                      
+
                       <FormField
                         control={jobForm.control}
                         name="benefits"
@@ -660,7 +682,7 @@ export default function FranchiseeDashboard() {
                           <FormItem>
                             <FormLabel>Benefits (Optional)</FormLabel>
                             <FormControl>
-                              <Textarea 
+                              <Textarea
                                 placeholder="List any benefits or perks offered with this position"
                                 className="min-h-[80px]"
                                 {...field}
@@ -670,10 +692,10 @@ export default function FranchiseeDashboard() {
                           </FormItem>
                         )}
                       />
-                      
+
                       <div className="flex justify-end">
-                        <Button 
-                          type="submit" 
+                        <Button
+                          type="submit"
                           className="bg-[#ff7a00] hover:bg-orange-600"
                           disabled={createJobMutation.isPending}
                         >

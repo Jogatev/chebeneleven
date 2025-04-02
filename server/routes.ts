@@ -475,6 +475,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!updatedApplication) {
         return res.status(404).json({ error: "Failed to update application" });
       }
+
+      // If application is accepted, mark the job as filled
+      if (req.body.status === "accepted") {
+        await storage.updateJob(job.id, { status: "filled" });
+      }
       
       // Send status update email notification
       try {

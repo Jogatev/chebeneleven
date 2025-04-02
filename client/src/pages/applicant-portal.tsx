@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import Header from "@/components/header";
+import { Checkbox } from "@/components/ui/checkbox";
 import JobCard from "@/components/job-card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,8 @@ export default function ApplicantPortal() {
   const [keyword, setKeyword] = useState("");
   const [location, setLocationFilter] = useState("");
   const [sortOrder, setSortOrder] = useState("newest");
+  const [minSalary, setMinSalary] = useState("");
+  const [maxSalary, setMaxSalary] = useState("");
 
   // Fetch job listings
   const { data: jobs, isLoading, error } = useQuery<JobListing[]>({
@@ -79,33 +82,68 @@ export default function ApplicantPortal() {
             
             {/* Search and Filter Form */}
             <form onSubmit={handleSearch} className="bg-white rounded-lg p-4 text-neutral-800">
-              <div className="grid md:grid-cols-3 gap-4">
-                <div>
-                  <label htmlFor="keyword" className="block text-sm font-medium text-gray-700 mb-1">
-                    Keywords
-                  </label>
-                  <Input
-                    id="keyword"
-                    placeholder="Job title, skills, etc."
-                    value={keyword}
-                    onChange={(e) => setKeyword(e.target.value)}
-                  />
+              <div className="space-y-4">
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Position
+                    </label>
+                    <Select value={keyword} onValueChange={setKeyword}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select position" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Positions</SelectItem>
+                        {jobs?.map(job => (
+                          <SelectItem key={job.id} value={job.title}>
+                            {job.title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Location
+                    </label>
+                    <Input
+                      placeholder="City or province in Philippines"
+                      value={location}
+                      onChange={(e) => setLocationFilter(e.target.value)}
+                    />
+                  </div>
                 </div>
+
                 <div>
-                  <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
-                    Location
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Salary Range
                   </label>
-                  <Input
-                    id="location"
-                    placeholder="City or province in Philippines"
-                    value={location}
-                    onChange={(e) => setLocationFilter(e.target.value)}
-                  />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Input
+                        type="number"
+                        placeholder="Min salary"
+                        value={minSalary}
+                        onChange={(e) => setMinSalary(e.target.value)}
+                        className="w-full"
+                      />
+                    </div>
+                    <div>
+                      <Input
+                        type="number"
+                        placeholder="Max salary"
+                        value={maxSalary}
+                        onChange={(e) => setMaxSalary(e.target.value)}
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-end">
+
+                <div className="flex justify-end">
                   <Button
                     type="submit"
-                    className="w-full bg-[#00703c] hover:bg-green-700 transition-colors"
+                    className="bg-[#00703c] hover:bg-green-700 transition-colors"
                   >
                     Search Jobs
                   </Button>

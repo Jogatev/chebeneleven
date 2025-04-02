@@ -26,6 +26,11 @@ const statusLabels: Record<string, { label: string; color: string }> = {
   rejected: { label: "Rejected", color: "bg-red-500" },
 };
 
+// Placeholder -  This component needs to be implemented to handle resume preview and download with header/footer
+function ResumePreview({ resumeUrl, fileName, applicantName }: any) {
+  return <p>Resume Preview for {applicantName} ({fileName})</p>;
+}
+
 export default function ApplicationDetailsModal({
   application,
   open,
@@ -81,7 +86,7 @@ export default function ApplicationDetailsModal({
   };
 
   const currentStatus = status || "submitted";
-  const formattedSubmitDate = submittedAt ? format(new Date(submittedAt), "PPP") : "Unknown";
+  const formattedSubmitTime = submittedAt ? format(new Date(submittedAt), "PPP 'at' pp") : "Unknown";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -102,7 +107,7 @@ export default function ApplicationDetailsModal({
               {statusLabels[currentStatus].label}
             </Badge>
             <div className="text-sm text-muted-foreground">
-              Submitted: {formattedSubmitDate}
+              Submitted: {formattedSubmitTime}
             </div>
           </div>
 
@@ -138,22 +143,18 @@ export default function ApplicationDetailsModal({
               </div>
             </div>
             {resumeUrl && (
-              <div className="mt-2">
-                <p className="text-sm text-muted-foreground">Resume</p>
-                <a 
-                  href={resumeUrl.startsWith('/uploads') ? resumeUrl : resumeUrl} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
-                  className="text-blue-600 hover:underline hover:text-blue-800 flex items-center"
-                >
-                  {resumeUrl.startsWith('/uploads') ? "View Uploaded Resume" : "View Resume"}
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
-                    <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
-                  </svg>
-                </a>
-              </div>
-            )}
+                <div className="mt-2">
+                  <p className="text-sm text-muted-foreground">Resume</p>
+                  <ResumePreview
+                    resumeUrl={resumeUrl}
+                    fileName={`${firstName}_${lastName}_Resume.pdf`}
+                    applicantName={`${firstName} ${lastName}`}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Submitted: {formattedSubmitTime}
+                  </p>
+                </div>
+              )}
           </div>
 
           <div className="border rounded-lg p-4 grid gap-3">

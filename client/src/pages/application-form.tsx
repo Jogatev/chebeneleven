@@ -486,57 +486,124 @@ export default function ApplicationForm() {
                 <div className="border-b border-gray-200 pb-4 sm:pb-6">
                   <h2 className="text-lg sm:text-xl font-semibold text-neutral-800 mb-3 sm:mb-4">Availability & Preferences</h2>
                   <div className="space-y-3 sm:space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="availableShifts"
-                      render={() => (
-                        <FormItem>
-                          <div className="mb-2">
-                            <FormLabel className="text-sm sm:text-base">Available Work Hours*</FormLabel>
+                    <div className="space-y-4">
+                      <div>
+                        <h3 className="text-sm sm:text-base font-medium mb-2">Work Availability*</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <FormField
+                              control={form.control}
+                              name="workAvailability.holidayWork"
+                              render={({ field }) => (
+                                <FormItem className="flex items-center space-x-2">
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="text-sm font-normal">
+                                    Holiday Work
+                                  </FormLabel>
+                                </FormItem>
+                              )}
+                            />
+                            
+                            <FormField
+                              control={form.control}
+                              name="workAvailability.weekdayWork"
+                              render={({ field }) => (
+                                <FormItem className="flex items-center space-x-2">
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="text-sm font-normal">
+                                    Weekday Work (Mon-Fri)
+                                  </FormLabel>
+                                </FormItem>
+                              )}
+                            />
+                            
+                            <FormField
+                              control={form.control}
+                              name="workAvailability.weekendWork"
+                              render={({ field }) => (
+                                <FormItem className="flex items-center space-x-2">
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="text-sm font-normal">
+                                    Weekend Work
+                                  </FormLabel>
+                                </FormItem>
+                              )}
+                            />
                           </div>
-                          <div className="grid grid-cols-1 xs:grid-cols-2 gap-2 sm:gap-4">
-                            {shiftOptions.map((option) => (
-                              <FormField
-                                key={option.id}
-                                control={form.control}
-                                name="availableShifts"
-                                render={({ field }) => {
-                                  return (
-                                    <FormItem
-                                      key={option.id}
-                                      className="flex items-center space-x-2"
-                                    >
-                                      <FormControl>
-                                        <Checkbox
-                                          className="h-5 w-5 sm:h-4 sm:w-4"
-                                          checked={field.value?.includes(option.id)}
-                                          onCheckedChange={(checked) => {
-                                            const currentValue = field.value || [];
-                                            return checked
-                                              ? field.onChange([...currentValue, option.id])
-                                              : field.onChange(
-                                                  currentValue.filter(
-                                                    (value) => value !== option.id
-                                                  )
-                                                );
-                                          }}
-                                        />
-                                      </FormControl>
-                                      <FormLabel className="text-sm font-normal">
-                                        {option.label}
-                                      </FormLabel>
-                                    </FormItem>
-                                  );
-                                }}
-                              />
-                            ))}
+                          
+                          <div className="space-y-2">
+                            <FormField
+                              control={form.control}
+                              name="workAvailability.morningShift"
+                              render={({ field }) => (
+                                <FormItem className="flex items-center space-x-2">
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="text-sm font-normal">
+                                    Morning Shift (6am-2pm)
+                                  </FormLabel>
+                                </FormItem>
+                              )}
+                            />
+                            
+                            <FormField
+                              control={form.control}
+                              name="workAvailability.afternoonShift"
+                              render={({ field }) => (
+                                <FormItem className="flex items-center space-x-2">
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="text-sm font-normal">
+                                    Afternoon Shift (2pm-10pm)
+                                  </FormLabel>
+                                </FormItem>
+                              )}
+                            />
+                            
+                            <FormField
+                              control={form.control}
+                              name="workAvailability.nightShift"
+                              render={({ field }) => (
+                                <FormItem className="flex items-center space-x-2">
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="text-sm font-normal">
+                                    Night Shift (10pm-6am)
+                                  </FormLabel>
+                                </FormItem>
+                              )}
+                            />
                           </div>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                        </div>
+                      </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       <FormField
                         control={form.control}
                         name="startDate"
@@ -546,25 +613,6 @@ export default function ApplicationForm() {
                             <FormControl>
                               <Input 
                                 type="date" 
-                                className="h-10 sm:h-11 px-3"
-                                {...field} 
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="desiredPay"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-sm sm:text-base">Desired Hourly Pay</FormLabel>
-                            <FormControl>
-                              <Input 
-                                placeholder="₱" 
-                                inputMode="decimal"
                                 className="h-10 sm:h-11 px-3"
                                 {...field} 
                               />

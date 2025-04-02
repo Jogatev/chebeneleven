@@ -79,9 +79,15 @@ export const applications = pgTable("applications", {
   experience: text("experience"),
   education: text("education"),
   coverLetter: text("cover_letter"),
-  availableShifts: json("available_shifts").$type<string[]>().default([]),
+  workAvailability: json("work_availability").$type<{
+    holidayWork: boolean;
+    weekdayWork: boolean;
+    weekendWork: boolean;
+    morningShift: boolean;
+    afternoonShift: boolean;
+    nightShift: boolean;
+  }>(),
   startDate: timestamp("start_date"),
-  desiredPay: text("desired_pay"),
   status: text("status").notNull().default("submitted"), // submitted, under_review, interviewed, accepted, rejected
   submittedAt: timestamp("submitted_at").defaultNow().notNull(),
 });
@@ -104,7 +110,6 @@ export const insertApplicationSchema = baseApplicationSchema.pick({
   education: true,
   coverLetter: true,
   availableShifts: true,
-  desiredPay: true,
   status: true,
 }).extend({
   // Make referenceId optional for client submissions (will be generated on server)
