@@ -1,13 +1,14 @@
 import React, { useState, useRef, useEffect } from "react";
 import { jobResponsibilities, jobRequirements } from "@shared/job-templates";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import {
   DragDropContext,
   Droppable,
   Draggable,
   DropResult
 } from "@hello-pangea/dnd";
-import { X, Grip, Info, ChevronDown, ChevronUp } from "lucide-react";
+import { X, Grip, Info, ChevronDown, ChevronUp, Plus, Save } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -20,6 +21,15 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 interface TemplateItem {
   id: string;
@@ -44,6 +54,12 @@ export default function JobTemplateSelector({
   const [selectedItems, setSelectedItems] = useState<TemplateItem[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  
+  // Custom template states
+  const [customTemplates, setCustomTemplates] = useState<TemplateItem[]>([]);
+  const [isCustomDialogOpen, setIsCustomDialogOpen] = useState(false);
+  const [newTemplateTitle, setNewTemplateTitle] = useState("");
+  const [newTemplateContent, setNewTemplateContent] = useState("");
 
   // When component first renders, parse the initial value if it exists
   useEffect(() => {
@@ -88,6 +104,13 @@ export default function JobTemplateSelector({
           destination.index
         );
         setAvailableItems(items);
+      } else if (source.droppableId === "custom") {
+        const items = reorder(
+          customTemplates,
+          source.index,
+          destination.index
+        );
+        setCustomTemplates(items);
       }
     } else {
       // Moving from one list to another
@@ -95,9 +118,15 @@ export default function JobTemplateSelector({
         // Add item to selected
         const item = availableItems[source.index];
         setSelectedItems([...selectedItems, item]);
+      } else if (source.droppableId === "custom" && destination.droppableId === "selected") {
+        // Add custom item to selected
+        const item = customTemplates[source.index];
+        setSelectedItems([...selectedItems, item]);
       } else if (source.droppableId === "selected" && destination.droppableId === "available") {
         // Remove item from selected
-        const item = selectedItems[source.index];
+        setSelectedItems(selectedItems.filter((_, index) => index !== source.index));
+      } else if (source.droppableId === "selected" && destination.droppableId === "custom") {
+        // Remove item from selected
         setSelectedItems(selectedItems.filter((_, index) => index !== source.index));
       }
     }
@@ -111,6 +140,24 @@ export default function JobTemplateSelector({
     if (!selectedItems.find((selected) => selected.id === item.id)) {
       setSelectedItems([...selectedItems, item]);
     }
+  };
+
+  const handleCustomTemplateSubmit = () => {
+    if (newTemplateTitle.trim() && newTemplateContent.trim()) {
+      const newTemplate: TemplateItem = {
+        id: `custom-${Date.now()}`,
+        title: newTemplateTitle,
+        content: newTemplateContent
+      };
+      setCustomTemplates([...customTemplates, newTemplate]);
+      setNewTemplateTitle("");
+      setNewTemplateContent("");
+      setIsCustomDialogOpen(false);
+    }
+  };
+
+  const deleteCustomTemplate = (id: string) => {
+    setCustomTemplates(customTemplates.filter(template => template.id !== id));
   };
 
   return (
@@ -135,6 +182,49 @@ export default function JobTemplateSelector({
             Standard {type === "responsibilities" ? "Duties & Responsibilities" : "Requirements & Qualifications"}
           </h3>
           <div className="flex items-center space-x-2">
+            <Dialog open={isCustomDialogOpen} onOpenChange={setIsCustomDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8">
+                  <Plus className="h-4 w-4 mr-1" /> Create Template
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create Custom Template</DialogTitle>
+                  <DialogDescription>
+                    Add a new custom template for {type === "responsibilities" ? "job duties" : "requirements"}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Title</label>
+                    <Input
+                      placeholder="E.g., Leadership Skills"
+                      value={newTemplateTitle}
+                      onChange={(e) => setNewTemplateTitle(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Content</label>
+                    <Textarea
+                      placeholder="Describe the content in detail..."
+                      value={newTemplateContent}
+                      onChange={(e) => setNewTemplateContent(e.target.value)}
+                      className="min-h-[120px]"
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsCustomDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleCustomTemplateSubmit}>
+                    <Save className="h-4 w-4 mr-1" /> Save Template
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+            
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger>
@@ -166,45 +256,99 @@ export default function JobTemplateSelector({
         <CollapsibleContent className="mt-4">
           <DragDropContext onDragEnd={handleDragEnd}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Available Items */}
               <div>
-                <h4 className="text-xs font-medium text-gray-500 mb-2">Available Templates</h4>
-                <Droppable droppableId="available">
-                  {(provided) => (
-                    <div
-                      {...provided.droppableProps}
-                      ref={provided.innerRef}
-                      className="space-y-2 min-h-[200px] bg-white p-2 rounded border border-gray-200"
-                    >
-                      {availableItems.map((item, index) => (
-                        <Draggable key={item.id} draggableId={item.id} index={index}>
-                          {(provided) => (
-                            <div
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              className="p-2 bg-gray-50 rounded border border-gray-200 flex items-center gap-2"
-                            >
-                              <div {...provided.dragHandleProps} className="cursor-grab">
-                                <Grip size={16} className="text-gray-400" />
-                              </div>
-                              <div className="flex-1">
-                                <div className="font-medium text-sm">{item.title}</div>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => addItem(item)}
-                                className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
-                              >
-                                Add
-                              </button>
-                            </div>
-                          )}
-                        </Draggable>
-                      ))}
-                      {provided.placeholder}
+                <div className="space-y-4">
+                  {/* Available Items */}
+                  <div>
+                    <h4 className="text-xs font-medium text-gray-500 mb-2">Available Templates</h4>
+                    <Droppable droppableId="available">
+                      {(provided) => (
+                        <div
+                          {...provided.droppableProps}
+                          ref={provided.innerRef}
+                          className="space-y-2 min-h-[100px] bg-white p-2 rounded border border-gray-200"
+                        >
+                          {availableItems.map((item, index) => (
+                            <Draggable key={item.id} draggableId={item.id} index={index}>
+                              {(provided) => (
+                                <div
+                                  ref={provided.innerRef}
+                                  {...provided.draggableProps}
+                                  className="p-2 bg-gray-50 rounded border border-gray-200 flex items-center gap-2"
+                                >
+                                  <div {...provided.dragHandleProps} className="cursor-grab">
+                                    <Grip size={16} className="text-gray-400" />
+                                  </div>
+                                  <div className="flex-1">
+                                    <div className="font-medium text-sm">{item.title}</div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => addItem(item)}
+                                    className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                                  >
+                                    Add
+                                  </button>
+                                </div>
+                              )}
+                            </Draggable>
+                          ))}
+                          {provided.placeholder}
+                        </div>
+                      )}
+                    </Droppable>
+                  </div>
+
+                  {/* Custom Templates */}
+                  {customTemplates.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-medium text-gray-500 mb-2">My Custom Templates</h4>
+                      <Droppable droppableId="custom">
+                        {(provided) => (
+                          <div
+                            {...provided.droppableProps}
+                            ref={provided.innerRef}
+                            className="space-y-2 min-h-[50px] bg-white p-2 rounded border border-gray-200"
+                          >
+                            {customTemplates.map((item, index) => (
+                              <Draggable key={item.id} draggableId={item.id} index={index}>
+                                {(provided) => (
+                                  <div
+                                    ref={provided.innerRef}
+                                    {...provided.draggableProps}
+                                    className="p-2 bg-blue-50 rounded border border-blue-200 flex items-center gap-2"
+                                  >
+                                    <div {...provided.dragHandleProps} className="cursor-grab">
+                                      <Grip size={16} className="text-gray-400" />
+                                    </div>
+                                    <div className="flex-1">
+                                      <div className="font-medium text-sm">{item.title}</div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => addItem(item)}
+                                      className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                                    >
+                                      Add
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => deleteCustomTemplate(item.id)}
+                                      className="text-red-500 hover:text-red-700"
+                                    >
+                                      <X size={16} />
+                                    </button>
+                                  </div>
+                                )}
+                              </Draggable>
+                            ))}
+                            {provided.placeholder}
+                          </div>
+                        )}
+                      </Droppable>
                     </div>
                   )}
-                </Droppable>
+                </div>
               </div>
 
               {/* Selected Items */}
