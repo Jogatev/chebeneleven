@@ -1,153 +1,432 @@
-import { useState, useCallback, useMemo } from 'react';
-import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from '@react-google-maps/api';
-import { storeLocations } from '@shared/store-locations';
-import { MapPin } from 'lucide-react';
-
-const GOOGLE_MAPS_API_KEY = 'AIzaSyCAv797FUnDJyX0kULmzwaFdjEdYeYkksM';
-
-const mapContainerStyle = {
-  width: '100%',
-  height: '100%',
-};
-
-// Center on Metro Manila by default
-const defaultCenter = {
-  lat: 14.5995,
-  lng: 120.9842
-};
+import { useRef, useState, useEffect } from "react";
+import { Loader } from "@googlemaps/js-api-loader";
+import { MapPin, Target, Search, Store } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { storeLocations } from "@shared/store-locations";
 
 interface GoogleMapComponentProps {
   locations: typeof storeLocations;
-  onSelectLocation?: (location: (typeof storeLocations)[0]) => void;
+  onSelectLocation: (location: typeof storeLocations[0] | any) => void;
+  selectedLocation?: typeof storeLocations[0] | null;
+  allowCustomPin?: boolean;
 }
 
-export default function GoogleMapComponent({ 
-  locations, 
-  onSelectLocation 
+export default function GoogleMapComponent({
+  locations,
+  onSelectLocation,
+  selectedLocation,
+  allowCustomPin = false,
 }: GoogleMapComponentProps) {
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: GOOGLE_MAPS_API_KEY
+  const mapRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [map, setMap] = useState<google.maps.Map | null>(null);
+  const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
+  const [markers, setMarkers] = useState<google.maps.Marker[]>([]);
+  const [customMarker, setCustomMarker] = useState<google.maps.Marker | null>(null);
+  const [customLocation, setCustomLocation] = useState<{
+    id: string;
+    name: string;
+    fullAddress: string;
+    coordinates: { lat: number; lng: number };
+  } | null>(null);
+  const [isCreatingCustomPin, setIsCreatingCustomPin] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isLoadingMap, setIsLoadingMap] = useState(true);
+
+  // Define marker icons (without using image files)
+  const createStoreIcon = (isSelected = false) => ({
+    path: google.maps.SymbolPath.CIRCLE,
+    fillColor: isSelected ? '#1E40AF' : '#FF7E00', // Blue for selected, Orange for regular store
+    fillOpacity: 1,
+    strokeWeight: 2,
+    strokeColor: isSelected ? '#1E3A8A' : '#D97706',
+    scale: 10,
+    labelOrigin: new google.maps.Point(0, -15),
   });
 
-  const [map, setMap] = useState<google.maps.Map | null>(null);
-  const [selectedLocation, setSelectedLocation] = useState<(typeof storeLocations)[0] | null>(null);
+  const createCustomIcon = () => ({
+    path: google.maps.SymbolPath.CIRCLE,
+    fillColor: '#10B981', // Green for custom location
+    fillOpacity: 1,
+    strokeWeight: 2,
+    strokeColor: '#059669',
+    scale: 10,
+    labelOrigin: new google.maps.Point(0, -15),
+  });
 
-  const onLoad = useCallback((map: google.maps.Map) => {
-    // Fit map to include all markers if there are locations
-    if (locations.length > 0) {
+  // Initialize the map
+  useEffect(() => {
+    const initMap = async () => {
+      setIsLoadingMap(true);
+      const loader = new Loader({
+        apiKey: 'AIzaSyCAv797FUnDJyX0kULmzwaFdjEdYeYkksM',
+        version: "weekly",
+        libraries: ["places"], // Add places library for search functionality
+      });
+
+      try {
+        const google = await loader.load();
+        if (mapRef.current) {
+          // Center the map on the Philippines
+          const mapOptions = {
+            center: { lat: 14.5995, lng: 120.9842 }, // Manila
+            zoom: 12,
+            mapTypeControl: false,
+            streetViewControl: false,
+            fullscreenControl: false,
+          };
+          
+          const newMap = new google.maps.Map(mapRef.current, mapOptions);
+          setMap(newMap);
+          
+          // Initialize the places autocomplete
+          if (searchInputRef.current) {
+            const autocompleteOptions = {
+              types: ['geocode', 'establishment'],
+              componentRestrictions: { country: 'ph' }, // Restrict to Philippines
+              fields: ['geometry', 'name', 'formatted_address']
+            };
+            
+            const newAutocomplete = new google.maps.places.Autocomplete(
+              searchInputRef.current,
+              autocompleteOptions
+            );
+            
+            newAutocomplete.bindTo('bounds', newMap);
+            setAutocomplete(newAutocomplete);
+            
+            // Handle place selection
+            newAutocomplete.addListener('place_changed', () => {
+              const place = newAutocomplete.getPlace();
+              
+              if (place.geometry && place.geometry.location) {
+                // Create a custom location from the selected place
+                const newCustomLocation = {
+                  id: `search-${Date.now()}`,
+                  name: place.name || "Searched Location",
+                  fullAddress: place.formatted_address || "",
+                  coordinates: { 
+                    lat: place.geometry.location.lat(), 
+                    lng: place.geometry.location.lng() 
+                  }
+                };
+                
+                // Add a marker for the selected place
+                if (customMarker) {
+                  customMarker.setMap(null);
+                }
+                
+                const newMarker = new google.maps.Marker({
+                  position: place.geometry.location,
+                  map: newMap,
+                  animation: google.maps.Animation.DROP,
+                  icon: createCustomIcon(),
+                  label: {
+                    text: "📍",
+                    fontSize: "16px",
+                    fontWeight: "bold",
+                    color: "#10B981"
+                  }
+                });
+                
+                setCustomMarker(newMarker);
+                setCustomLocation(newCustomLocation);
+                
+                // Pan to the location
+                if (place.geometry.viewport) {
+                  newMap.fitBounds(place.geometry.viewport);
+                } else {
+                  newMap.setCenter(place.geometry.location);
+                  newMap.setZoom(17);
+                }
+                
+                // Pass the selected location back
+                onSelectLocation(newCustomLocation);
+              }
+            });
+          }
+          
+          setIsLoadingMap(false);
+        }
+      } catch (error) {
+        console.error("Error loading Google Maps:", error);
+        setIsLoadingMap(false);
+      }
+    };
+
+    initMap();
+  }, [onSelectLocation]);
+
+  // Add markers for 7-Eleven locations
+  useEffect(() => {
+    if (!map) return;
+    
+    // Clear existing markers
+    markers.forEach(marker => marker.setMap(null));
+    
+    // Create new markers for 7-Eleven locations
+    const newMarkers = locations.map(location => {
+      const marker = new google.maps.Marker({
+        position: { 
+          lat: location.coordinates.lat, 
+          lng: location.coordinates.lng 
+        },
+        map,
+        title: location.name,
+        icon: createStoreIcon(selectedLocation?.id === location.id),
+        label: {
+          text: "🏪",
+          fontSize: "16px",
+          fontWeight: "bold",
+          color: "#000000"
+        }
+      });
+
+      // Add info window
+      const infoWindow = new google.maps.InfoWindow({
+        content: `<div style="padding: 10px; max-width: 200px;">
+          <div style="font-weight: bold; margin-bottom: 5px;">${location.name}</div>
+          <div style="font-size: 0.9em; margin-bottom: 8px;">${location.fullAddress}</div>
+          <button style="background-color: #10B981; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.9em;" 
+            id="select-store-${location.id}">
+            Select this store
+          </button>
+        </div>`
+      });
+      
+      // Add click event listener
+      marker.addListener('click', () => {
+        // Close all open info windows (if needed)
+        infoWindow.open(map, marker);
+        
+        // Add event listener for the select button in info window
+        google.maps.event.addListenerOnce(infoWindow, 'domready', () => {
+          const selectBtn = document.getElementById(`select-store-${location.id}`);
+          if (selectBtn) {
+            selectBtn.addEventListener('click', () => {
+              onSelectLocation(location);
+              infoWindow.close();
+            });
+          }
+        });
+      });
+
+      return marker;
+    });
+
+    setMarkers(newMarkers);
+
+    // Fit bounds to show all markers
+    if (newMarkers.length > 0) {
       const bounds = new google.maps.LatLngBounds();
-      locations.forEach(location => {
-        bounds.extend(new google.maps.LatLng(
-          location.coordinates.lat,
-          location.coordinates.lng
-        ));
+      newMarkers.forEach(marker => {
+        bounds.extend(marker.getPosition()!);
       });
       map.fitBounds(bounds);
     }
-    setMap(map);
-  }, [locations]);
 
-  const onUnmount = useCallback(() => {
-    setMap(null);
-  }, []);
+    // Add click listener for custom pin if allowed
+    if (allowCustomPin) {
+      const clickListener = map.addListener('click', (event: google.maps.MapMouseEvent) => {
+        if (isCreatingCustomPin && event.latLng) {
+          addCustomPin(event.latLng);
+        }
+      });
 
-  const handleMarkerClick = (location: (typeof storeLocations)[0]) => {
-    setSelectedLocation(location);
-  };
-
-  const handleInfoWindowClose = () => {
-    setSelectedLocation(null);
-  };
-
-  const handleSelectLocation = (location: (typeof storeLocations)[0]) => {
-    if (onSelectLocation) {
-      onSelectLocation(location);
+      return () => {
+        google.maps.event.removeListener(clickListener);
+      };
     }
-    setSelectedLocation(null);
+  }, [map, locations, selectedLocation, allowCustomPin, isCreatingCustomPin, onSelectLocation]);
+
+  // Function to add a custom pin
+  const addCustomPin = async (latLng: google.maps.LatLng) => {
+    if (!map) return;
+
+    // Remove existing custom marker if any
+    if (customMarker) {
+      customMarker.setMap(null);
+    }
+
+    // Create a new marker
+    const newMarker = new google.maps.Marker({
+      position: latLng,
+      map,
+      animation: google.maps.Animation.DROP,
+      icon: createCustomIcon(),
+      label: {
+        text: "📍",
+        fontSize: "16px",
+        fontWeight: "bold",
+        color: "#10B981"
+      }
+    });
+
+    setCustomMarker(newMarker);
+
+    // Get address using reverse geocoding
+    const geocoder = new google.maps.Geocoder();
+    const response = await geocoder.geocode({
+      location: { lat: latLng.lat(), lng: latLng.lng() }
+    });
+
+    if (response.results[0]) {
+      const address = response.results[0].formatted_address;
+      
+      // Create a custom location object
+      const newCustomLocation = {
+        id: `custom-${Date.now()}`,
+        name: "Custom Location",
+        fullAddress: address,
+        coordinates: { 
+          lat: latLng.lat(), 
+          lng: latLng.lng() 
+        }
+      };
+
+      setCustomLocation(newCustomLocation);
+      onSelectLocation(newCustomLocation);
+      setIsCreatingCustomPin(false);
+    }
   };
 
-  const mapOptions = useMemo(() => ({
-    disableDefaultUI: false,
-    clickableIcons: true,
-    scrollwheel: true,
-    styles: [
-      {
-        featureType: "poi",
-        elementType: "labels",
-        stylers: [{ visibility: "on" }],
-      },
-    ],
-  }), []);
+  // Toggle custom pin creation mode
+  const toggleCustomPinMode = () => {
+    setIsCreatingCustomPin(!isCreatingCustomPin);
+  };
 
-  if (loadError) {
-    return (
-      <div className="flex items-center justify-center h-full bg-gray-100 p-4">
-        <div className="text-center text-red-500">
-          Error loading Google Maps. Please check your API key or try again later.
-        </div>
-      </div>
+  // Handle manual search submission
+  const handleManualSearch = () => {
+    if (!map || !searchQuery.trim()) return;
+    
+    const geocoder = new google.maps.Geocoder();
+    geocoder.geocode(
+      { address: searchQuery, componentRestrictions: { country: 'ph' } },
+      (results, status) => {
+        if (status === google.maps.GeocoderStatus.OK && results && results[0]) {
+          const location = results[0].geometry.location;
+          
+          // Create a custom location
+          const newCustomLocation = {
+            id: `search-${Date.now()}`,
+            name: "Searched Location",
+            fullAddress: results[0].formatted_address || searchQuery,
+            coordinates: { 
+              lat: location.lat(), 
+              lng: location.lng() 
+            }
+          };
+          
+          // Add a marker
+          if (customMarker) {
+            customMarker.setMap(null);
+          }
+          
+          const newMarker = new google.maps.Marker({
+            position: location,
+            map,
+            animation: google.maps.Animation.DROP,
+            icon: createCustomIcon(),
+            label: {
+              text: "📍",
+              fontSize: "16px",
+              fontWeight: "bold",
+              color: "#10B981"
+            }
+          });
+          
+          setCustomMarker(newMarker);
+          setCustomLocation(newCustomLocation);
+          
+          // Center the map on the result
+          map.setCenter(location);
+          map.setZoom(16);
+          
+          // Pass the selected location back
+          onSelectLocation(newCustomLocation);
+        }
+      }
     );
-  }
-
-  if (!isLoaded) {
-    return (
-      <div className="flex items-center justify-center h-full bg-gray-100">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-orange-500"></div>
-      </div>
-    );
-  }
+  };
 
   return (
-    <GoogleMap
-      mapContainerStyle={mapContainerStyle}
-      center={defaultCenter}
-      zoom={10}
-      onLoad={onLoad}
-      onUnmount={onUnmount}
-      options={mapOptions}
-    >
-      {locations.map(location => (
-        <Marker
-          key={location.id}
-          position={{
-            lat: location.coordinates.lat,
-            lng: location.coordinates.lng
-          }}
-          onClick={() => handleMarkerClick(location)}
-          icon={{
-            url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#00703c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                <circle cx="12" cy="10" r="3"></circle>
-              </svg>
-            `),
-            scaledSize: new google.maps.Size(32, 32),
-            anchor: new google.maps.Point(16, 32),
-          }}
-        />
-      ))}
-
-      {selectedLocation && (
-        <InfoWindow
-          position={{
-            lat: selectedLocation.coordinates.lat,
-            lng: selectedLocation.coordinates.lng
-          }}
-          onCloseClick={handleInfoWindowClose}
-        >
-          <div className="p-2 max-w-[240px]">
-            <h3 className="font-medium text-[#00703c]">{selectedLocation.name}</h3>
-            <p className="text-sm text-gray-600 mt-1">{selectedLocation.fullAddress}</p>
-            <button
-              onClick={() => handleSelectLocation(selectedLocation)}
-              className="mt-3 text-sm bg-[#00703c] hover:bg-[#005a30] text-white py-1 px-2 rounded w-full"
-            >
-              Select this location
-            </button>
-          </div>
-        </InfoWindow>
+    <div className="h-full relative">
+      {/* Search Box - Google Maps Style */}
+      <div className="absolute top-2 left-0 right-0 z-10 mx-2 sm:mx-10">
+        <div className="flex shadow-md rounded-md overflow-hidden">
+          <Input
+            ref={searchInputRef}
+            placeholder="Search for locations in the Philippines"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="border-0 bg-white rounded-r-none px-3 py-2 h-10 focus-visible:ring-0 focus-visible:ring-offset-0"
+          />
+          <Button 
+            variant="default" 
+            onClick={handleManualSearch}
+            className="rounded-l-none h-10 px-3"
+          >
+            <Search className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+      
+      {/* Custom Pin Button */}
+      {allowCustomPin && (
+        <div className="absolute top-14 right-2 z-10 sm:right-10">
+          <Button 
+            size="sm"
+            variant={isCreatingCustomPin ? "default" : "secondary"}
+            onClick={toggleCustomPinMode}
+            className="flex items-center gap-1 shadow-md"
+          >
+            <Target className="h-4 w-4" />
+            {isCreatingCustomPin ? "Click on Map" : "Custom Pin"}
+          </Button>
+        </div>
       )}
-    </GoogleMap>
+      
+      {/* Store Locations Button */}
+      <div className="absolute top-14 left-2 z-10 sm:left-10">
+        <Button 
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            if (map && markers.length > 0) {
+              const bounds = new google.maps.LatLngBounds();
+              markers.forEach(marker => {
+                bounds.extend(marker.getPosition()!);
+              });
+              map.fitBounds(bounds);
+            }
+          }}
+          className="flex items-center gap-1 shadow-md bg-white"
+        >
+          <Store className="h-4 w-4" />
+          7-Eleven Stores
+        </Button>
+      </div>
+      
+      {/* Map Container */}
+      <div ref={mapRef} className="h-full w-full" />
+      
+      {/* Loading Indicator */}
+      {isLoadingMap && (
+        <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-70">
+          <div className="flex flex-col items-center">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-700"></div>
+            <p className="mt-2 text-gray-700">Loading map...</p>
+          </div>
+        </div>
+      )}
+      
+      {/* Instructions for Custom Pin */}
+      {isCreatingCustomPin && (
+        <div className="absolute bottom-2 left-2 right-2 z-10 bg-white p-2 rounded-md shadow-md text-sm text-center mx-2">
+          Click anywhere on the map to place your custom location pin
+        </div>
+      )}
+    </div>
   );
 }
