@@ -42,17 +42,17 @@ export default function ApplicantPortal() {
 
   // Filter and sort jobs
   const filteredJobs = jobs 
-    ? jobs.filter(job => {
-        const matchesKeyword = !keyword || 
-          job.title.toLowerCase().includes(keyword.toLowerCase()) ||
-          job.description.toLowerCase().includes(keyword.toLowerCase());
-        
-        const matchesLocation = !location || 
-          job.location.toLowerCase().includes(location.toLowerCase());
-        
-        return matchesKeyword && matchesLocation;
-      })
-    : [];
+  ? jobs.filter(job => {
+      const matchesKeyword = !keyword || keyword === "all" || 
+        job.title.toLowerCase().includes(keyword.toLowerCase()) ||
+        job.description.toLowerCase().includes(keyword.toLowerCase());
+      
+      const matchesLocation = !location || 
+        job.location.toLowerCase().includes(location.toLowerCase());
+      
+      return matchesKeyword && matchesLocation;
+    })
+  : [];
 
   const sortedJobs = [...filteredJobs].sort((a, b) => {
     if (sortOrder === "newest") {
