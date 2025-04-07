@@ -37,10 +37,21 @@ export default function JobCard({ job, onClick }: JobCardProps) {
         <div>
           <h3 className="text-xl font-semibold text-neutral-800 mb-1">{job.title}</h3>
           <p className="text-[#00703c] font-medium mb-2">7-Eleven - {job.location}</p>
-          <div className="flex items-center text-gray-600 mb-3">
-            <MapPin className="h-5 w-5 mr-1" />
-            <span>{job.location}</span>
+          
+          <div className="flex flex-wrap items-center gap-4 mb-3">
+            <div className="flex items-center text-gray-600">
+              <MapPin className="h-5 w-5 mr-1" />
+              <span>{job.location}</span>
+            </div>
+            
+            {job.payRange && (
+              <div className="flex items-center text-gray-600">
+                <span className="font-medium mr-1">₱</span>
+                <span>{job.payRange}</span>
+              </div>
+            )}
           </div>
+          
           <div className="space-y-2">
             <p className="text-gray-700">
               {job.description.length > 200

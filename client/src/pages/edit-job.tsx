@@ -4,7 +4,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { Loader2, MapPin } from "lucide-react";
 
 import { insertJobListingSchema, JobListing } from "@shared/schema";
 import Header from "@/components/header";
@@ -16,6 +16,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,6 +31,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
+import JobTemplateSelector from "@/components/job-template-selector";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import MapSelector from "@/components/map-selector";
 
 const editJobSchema = insertJobListingSchema.extend({
   id: z.number(),
@@ -43,6 +47,9 @@ export default function EditJobPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
+  const [isMapOpen, setIsMapOpen] = useState(false);
+  const [minSalary, setMinSalary] = useState("");
+  const [maxSalary, setMaxSalary] = useState("");
 
   // Fetch job details
   const {
@@ -71,6 +78,19 @@ export default function EditJobPage() {
       tags: [],
     },
   });
+
+  // Parse pay range when job data is loaded
+  useEffect(() => {
+    if (job && job.payRange) {
+      const matches = job.payRange.match(/\d+/g);
+      if (matches && matches.length > 0) {
+        setMinSalary(matches[0]);
+        if (matches.length > 1) {
+          setMaxSalary(matches[matches.length - 1]);
+        }
+      }
+    }
+  }, [job]);
 
   // Update form values when job data is loaded
   useEffect(() => {
@@ -133,6 +153,28 @@ export default function EditJobPage() {
 
   const onSubmit = (data: EditJobFormValues) => {
     updateJobMutation.mutate(data);
+  };
+
+  // Update pay range in the form when min/max values change
+  useEffect(() => {
+    if (minSalary || maxSalary) {
+      let payRangeValue = "";
+      
+      if (minSalary && maxSalary) {
+        payRangeValue = `${minSalary}-${maxSalary}`;
+      } else if (minSalary) {
+        payRangeValue = minSalary;
+      } else if (maxSalary) {
+        payRangeValue = maxSalary;
+      }
+      
+      form.setValue("payRange", payRangeValue);
+    }
+  }, [minSalary, maxSalary, form]);
+
+  const handleLocationSelected = (location: string) => {
+    form.setValue("location", location);
+    setIsMapOpen(false);
   };
 
   if (isLoading) {
@@ -224,12 +266,35 @@ export default function EditJobPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Location</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="e.g. 123 Main St, San Diego, CA"
-                          {...field}
-                        />
-                      </FormControl>
+                      <div className="flex">
+                        <FormControl>
+                          <div className="relative flex-1">
+                            <Input
+                              placeholder="e.g. 123 Main St, Manila, Philippines"
+                              {...field}
+                            />
+                          </div>
+                        </FormControl>
+                        <Dialog open={isMapOpen} onOpenChange={setIsMapOpen}>
+                          <DialogTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="ml-2"
+                            >
+                              <MapPin className="h-4 w-4 mr-1" /> Map
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="sm:max-w-[600px]">
+                            <DialogHeader>
+                              <DialogTitle>Select Store Location</DialogTitle>
+                            </DialogHeader>
+                            <div className="h-[400px] mt-4">
+                              <MapSelector onSelectLocation={handleLocationSelected} />
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                      </div>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -268,14 +333,32 @@ export default function EditJobPage() {
                     name="payRange"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Pay Range</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="e.g. $15-20/hr or $40,000-50,000/year"
-                            {...field}
-                            value={field.value ?? ''}
-                          />
-                        </FormControl>
+                        <FormLabel>Pay Range (₱)</FormLabel>
+                        <div className="flex items-center">
+                          <span className="mr-2 text-gray-500">₱</span>
+                          <div className="flex items-center flex-1">
+                            <Input
+                              type="number"
+                              placeholder="Min"
+                              min="0"
+                              value={minSalary}
+                              onChange={(e) => setMinSalary(e.target.value)}
+                              className="rounded-r-none"
+                            />
+                            <span className="px-2 py-2 border-t border-b">-</span>
+                            <Input
+                              type="number"
+                              placeholder="Max"
+                              min="0"
+                              value={maxSalary}
+                              onChange={(e) => setMaxSalary(e.target.value)}
+                              className="rounded-l-none"
+                            />
+                          </div>
+                        </div>
+                        <FormDescription className="text-xs text-gray-500 mt-1">
+                          Monthly salary in Philippine Peso
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -289,10 +372,10 @@ export default function EditJobPage() {
                     <FormItem>
                       <FormLabel>Job Description</FormLabel>
                       <FormControl>
-                        <Textarea
-                          placeholder="Describe the job responsibilities and requirements..."
-                          className="min-h-[150px]"
-                          {...field}
+                        <JobTemplateSelector
+                          type="responsibilities"
+                          value={field.value}
+                          onChange={field.onChange}
                         />
                       </FormControl>
                       <FormMessage />
@@ -307,10 +390,10 @@ export default function EditJobPage() {
                     <FormItem>
                       <FormLabel>Requirements</FormLabel>
                       <FormControl>
-                        <Textarea
-                          placeholder="List the requirements for this position..."
-                          className="min-h-[100px]"
-                          {...field}
+                        <JobTemplateSelector
+                          type="requirements"
+                          value={field.value}
+                          onChange={field.onChange}
                         />
                       </FormControl>
                       <FormMessage />
