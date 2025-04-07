@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { type JobListing } from "@shared/schema";
-import { MapPin, DollarSign } from "lucide-react";
+import { MapPin } from "lucide-react";
 
 interface JobCardProps {
   job: JobListing;
@@ -17,7 +17,7 @@ export default function JobCard({ job, onClick }: JobCardProps) {
   const getPostedTimeText = () => {
     if (daysSincePosting === 0) return "Posted today";
     if (daysSincePosting === 1) return "Posted 1 day ago";
-    return `Posted ₱{daysSincePosting} days ago`;
+    return `Posted ${daysSincePosting} days ago`;
   };
 
   // Extract tags from job if available
@@ -46,7 +46,7 @@ export default function JobCard({ job, onClick }: JobCardProps) {
             
             {job.payRange && (
               <div className="flex items-center text-gray-600">
-                <DollarSign className="h-5 w-5 mr-1" />
+                <span className="font-medium mr-1">₱</span>
                 <span>{job.payRange}</span>
               </div>
             )}
@@ -55,7 +55,7 @@ export default function JobCard({ job, onClick }: JobCardProps) {
           <div className="space-y-2">
             <p className="text-gray-700">
               {job.description.length > 200
-                ? `₱{job.description.substring(0, 200)}...`
+                ? `${job.description.substring(0, 200)}...`
                 : job.description}
             </p>
             <div className="flex flex-wrap gap-2">
