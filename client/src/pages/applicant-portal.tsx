@@ -27,7 +27,7 @@ export default function ApplicantPortal() {
     e.preventDefault();
     // In a real app, we would make an API call with filters
     // For this demo, we'll just log the search params
-    console.log("Searching for:", { keyword, location });
+    console.log("Searching for:", { keyword, location, minSalary, maxSalary });
   };
 
   // Handle job card click to navigate to application form
@@ -42,17 +42,46 @@ export default function ApplicantPortal() {
 
   // Filter and sort jobs
   const filteredJobs = jobs 
-  ? jobs.filter(job => {
-      const matchesKeyword = !keyword || keyword === "all" || 
-        job.title.toLowerCase().includes(keyword.toLowerCase()) ||
-        job.description.toLowerCase().includes(keyword.toLowerCase());
-      
-      const matchesLocation = !location || 
-        job.location.toLowerCase().includes(location.toLowerCase());
-      
-      return matchesKeyword && matchesLocation;
-    })
-  : [];
+    ? jobs.filter(job => {
+        // Keyword filter
+        const matchesKeyword = !keyword || keyword === "all" || 
+          job.title.toLowerCase().includes(keyword.toLowerCase()) ||
+          job.description.toLowerCase().includes(keyword.toLowerCase());
+        
+        // Location filter
+        const matchesLocation = !location || 
+          job.location.toLowerCase().includes(location.toLowerCase());
+        
+        // Salary range filter
+        let matchesSalary = true;
+        
+        if (job.payRange) {
+          // Extract numbers from the payRange string
+          const salaryNumbers = job.payRange.match(/\d+/g);
+          if (salaryNumbers && salaryNumbers.length > 0) {
+            // Get the job salary values (use first number as min, last as max if multiple exist)
+            const jobMinSalary = parseInt(salaryNumbers[0]);
+            const jobMaxSalary = salaryNumbers.length > 1 ? 
+                                parseInt(salaryNumbers[salaryNumbers.length - 1]) : 
+                                jobMinSalary;
+            
+            // Check if job salary is within the user-specified range
+            if (minSalary && parseInt(minSalary) > jobMaxSalary) {
+              matchesSalary = false;
+            }
+            
+            if (maxSalary && parseInt(maxSalary) < jobMinSalary) {
+              matchesSalary = false;
+            }
+          }
+        } else if (minSalary) {
+          // If job has no salary info but user specified min salary, don't match
+          matchesSalary = false;
+        }
+        
+        return matchesKeyword && matchesLocation && matchesSalary;
+      })
+    : [];
 
   const sortedJobs = [...filteredJobs].sort((a, b) => {
     if (sortOrder === "newest") {
@@ -116,7 +145,7 @@ export default function ApplicantPortal() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Salary Range
+                    Salary Range {(minSalary || maxSalary) && <span className="text-green-600 text-xs ml-1">(Active)</span>}
                   </label>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -125,7 +154,7 @@ export default function ApplicantPortal() {
                         placeholder="Min salary"
                         value={minSalary}
                         onChange={(e) => setMinSalary(e.target.value)}
-                        className="w-full"
+                        className={`w-full ${minSalary ? "border-green-500" : ""}`}
                       />
                     </div>
                     <div>
@@ -134,7 +163,7 @@ export default function ApplicantPortal() {
                         placeholder="Max salary"
                         value={maxSalary}
                         onChange={(e) => setMaxSalary(e.target.value)}
-                        className="w-full"
+                        className={`w-full ${maxSalary ? "border-green-500" : ""}`}
                       />
                     </div>
                   </div>
