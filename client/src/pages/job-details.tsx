@@ -32,12 +32,15 @@ export default function JobDetails() {
     error: jobError,
   } = useQuery<JobListing, Error>({
     queryKey: ["/api/jobs", jobId],
-    queryFn: ({ queryKey }) => {
+    queryFn: async ({ queryKey }) => {
       const [, id] = queryKey;
-      return fetch(`/api/jobs/${id}`).then((res) => {
-        if (!res.ok) throw new Error("Failed to load job");
-        return res.json();
-      });
+      try {
+        const response = await apiRequest("GET", `/api/jobs/${id}`);
+        return await response.json();
+      } catch (error) {
+        console.error("Error fetching job:", error);
+        throw new Error(error instanceof Error ? error.message : "Failed to load job");
+      }
     },
     enabled: !!jobId,
   });
@@ -48,12 +51,16 @@ export default function JobDetails() {
     error: applicationsError,
   } = useQuery<Application[], Error>({
     queryKey: ["/api/jobs", jobId, "applications"],
-    queryFn: ({ queryKey }) => {
+    queryFn: async ({ queryKey }) => {
       const [, id] = queryKey;
-      return fetch(`/api/jobs/${id}/applications`).then((res) => {
-        if (!res.ok) throw new Error("Failed to load applications");
-        return res.json();
-      });
+      try {
+        // Use the new endpoint
+        const response = await apiRequest("GET", `/api/applications/job/${id}`);
+        return await response.json();
+      } catch (error) {
+        console.error("Error fetching applications:", error);
+        throw new Error(error instanceof Error ? error.message : "Failed to load applications");
+      }
     },
     enabled: !!jobId,
   });

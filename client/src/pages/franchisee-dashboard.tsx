@@ -8,7 +8,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import ReportActions from "@/components/report-actions";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import ActivityCard from "@/components/activity-card";
 import {
   Form,
   FormControl,
@@ -74,6 +76,17 @@ export default function FranchiseeDashboard() {
 
 
   // Queries for job listings
+  // Add this with your other queries
+const {
+  data: activities,
+  isLoading: isActivitiesLoading,
+  error: activitiesError
+} = useQuery({
+  queryKey: ["/api/my-activities"],
+  // Only fetch when the activities tab is active
+  enabled: activeTab === "activities",
+});
+
   const {
     data: jobs,
     isLoading: isJobsLoading,
@@ -137,6 +150,8 @@ export default function FranchiseeDashboard() {
     mutationFn: async ({ id, status }: { id: number; status: string }) => {
       const res = await apiRequest("PATCH", `/api/jobs/${id}`, { status });
       return res.json();
+
+      
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/my-jobs"] });
@@ -152,7 +167,10 @@ export default function FranchiseeDashboard() {
         variant: "destructive",
       });
     },
+    
   });
+
+  
 
   // Auto-show charts when data is loaded
   useEffect(() => {
@@ -283,27 +301,36 @@ export default function FranchiseeDashboard() {
 
             {/* Analytics Charts Toggle */}
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold text-neutral-800">Analytics Overview</h2>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowCharts(!showCharts)}
-                className="flex items-center gap-2"
-              >
-                <LineChart size={16} />
-                {showCharts ? "Hide Charts" : "Show Charts"}
-              </Button>
-            </div>
+  <h2 className="text-lg font-semibold text-neutral-800">Analytics Overview</h2>
+  <div className="flex items-center gap-2">
+    <ReportActions 
+      reportTitle="7-Eleven Franchisee Dashboard Report" 
+      jobs={jobs}
+      applications={applications}
+      dashboardStats={dashboardStats}
+      DashboardCharts={DashboardCharts}
+    />
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => setShowCharts(!showCharts)}
+      className="flex items-center gap-2"
+    >
+      <LineChart size={16} />
+      {showCharts ? "Hide Charts" : "Show Charts"}
+    </Button>
+  </div>
+</div>
 
-            {/* Dashboard Charts */}
-            {showCharts && (isJobsLoading || isApplicationsLoading) ? (
-              <div className="p-8 text-center">
-                <Loader2 className="h-8 w-8 animate-spin mx-auto" />
-                <p className="mt-2 text-gray-500">Loading analytics data...</p>
-              </div>
-            ) : showCharts && jobs && applications ? (
-              <DashboardCharts jobs={jobs} applications={applications} />
-            ) : null}
+{/* Dashboard Charts */}
+{showCharts && (isJobsLoading || isApplicationsLoading) ? (
+  <div className="p-8 text-center">
+    <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+    <p className="mt-2 text-gray-500">Loading analytics data...</p>
+  </div>
+) : showCharts && jobs && applications ? (
+  <DashboardCharts jobs={jobs} applications={applications} />
+) : null}
 
           </div>
 
@@ -323,8 +350,14 @@ export default function FranchiseeDashboard() {
                     className="data-[state=active]:text-[#ff7a00] data-[state=active]:border-[#ff7a00] py-4 px-6 font-medium data-[state=active]:border-b-2 data-[state=inactive]:text-gray-500 data-[state=inactive]:border-transparent rounded-none"
                   >
                     Create Job
-                  </TabsTrigger>
-                </TabsList>
+                    </TabsTrigger>
+  <TabsTrigger 
+    value="activities"
+    className="data-[state=active]:text-[#ff7a00] data-[state=active]:border-[#ff7a00] py-4 px-6 font-medium data-[state=active]:border-b-2 data-[state=inactive]:text-gray-500 data-[state=inactive]:border-transparent rounded-none"
+  >
+    Activities
+  </TabsTrigger>
+</TabsList>
               </div>
 
               {/* Tab Content: Job Listings */}
@@ -345,6 +378,7 @@ export default function FranchiseeDashboard() {
                           <SelectItem value="active">Active</SelectItem>
                           <SelectItem value="filled">Filled</SelectItem>
                           <SelectItem value="closed">Closed</SelectItem>
+                          
                         </SelectContent>
                       </Select>
 
@@ -516,7 +550,42 @@ export default function FranchiseeDashboard() {
                 </div>
               </TabsContent>
 
-
+                  {/* Tab Content: Activities */}
+<TabsContent value="activities" className="p-0">
+  <div className="p-6">
+    <div className="flex justify-between items-center mb-4">
+      <h2 className="text-xl font-semibold text-neutral-800">Recent Activities</h2>
+      <ReportActions 
+        reportTitle="7-Eleven Activities Report" 
+        reportData={activities || []} 
+        columns={[
+          { header: "Action", accessor: "action" },
+          { header: "Entity Type", accessor: "entityType" },
+          { header: "Details", accessor: (row) => JSON.stringify(row.details) },
+          { header: "Date", accessor: "timestamp" },
+        ]} 
+      />
+    </div>
+    
+    {/* Activities list */}
+    <div className="space-y-4 mt-6">
+      {isActivitiesLoading ? (
+        <div className="text-center py-8">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+          <p className="mt-2 text-gray-500">Loading activities...</p>
+        </div>
+      ) : activities?.length ? (
+        activities.map((activity) => (
+          <ActivityCard key={activity.id} activity={activity} />
+        ))
+      ) : (
+        <div className="text-center py-8 border border-dashed border-gray-300 rounded-md">
+          <p className="text-gray-500">No activities found.</p>
+        </div>
+      )}
+    </div>
+  </div>
+</TabsContent>
 
               {/* Tab Content: Create Job */}
               <TabsContent value="createJob" className="p-0">

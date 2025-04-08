@@ -11,3 +11,38 @@
     @apply font-sans antialiased bg-background text-foreground;
   }
 }
+
+/* Print styles - these will only apply when printing */
+@media print {
+  /* Hide elements we don't want to print */
+  header, nav, footer, button, .no-print {
+    display: none !important;
+  }
+  
+  /* Reset page margins */
+  @page {
+    margin: 0.5in;
+  }
+  
+  /* Make text black on white background for better printing */
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 12pt !important;
+  }
+  
+  /* Ensure tables print well */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+  
+  table, th, td {
+    border: 1px solid #999 !important;
+  }
+  
+  th, td {
+    padding: 8px !important;
+    text-align: left !important;
+  }
+}

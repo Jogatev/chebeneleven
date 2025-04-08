@@ -7,7 +7,10 @@ import {
   type InsertJobListing,
   applications,
   type Application,
-  type InsertApplication
+  type InsertApplication,
+  activities,
+  type Activity,
+  type InsertActivity
 } from "@shared/schema";
 import session from "express-session";
 import createMemoryStore from "memorystore";
@@ -44,6 +47,11 @@ export interface IStorage {
   saveApplicationNote(applicationId: number, note: string): Promise<boolean>;
   getApplicationNote(applicationId: number): Promise<string | undefined>;
   
+  // Activity operations
+  getActivities(): Promise<Activity[]>;
+  getActivitiesByUserId(userId: number): Promise<Activity[]>;
+  createActivity(activity: InsertActivity): Promise<Activity>;
+  
   // Session store for authentication
   sessionStore: any;
 }
@@ -53,20 +61,24 @@ export class MemStorage implements IStorage {
   private users: Map<number, User>;
   private jobs: Map<number, JobListing>;
   private applications: Map<number, Application>;
+  private activities: Map<number, Activity>;
   private notes: Map<number, string>; // Store application notes
   currentUserId: number;
   currentJobId: number;
   currentApplicationId: number;
+  currentActivityId: number;
   sessionStore: any;
 
   constructor() {
     this.users = new Map();
     this.jobs = new Map();
     this.applications = new Map();
+    this.activities = new Map();
     this.notes = new Map(); // Initialize notes map
     this.currentUserId = 1;
     this.currentJobId = 1;
     this.currentApplicationId = 1;
+    this.currentActivityId = 1;
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000, // 24 hours
     });
@@ -274,6 +286,30 @@ export class MemStorage implements IStorage {
   
   async getApplicationNote(applicationId: number): Promise<string | undefined> {
     return this.notes.get(applicationId);
+  }
+
+  // Activity methods
+  async getActivities(): Promise<Activity[]> {
+    return Array.from(this.activities.values());
+  }
+
+  async getActivitiesByUserId(userId: number): Promise<Activity[]> {
+    return Array.from(this.activities.values())
+      .filter(activity => activity.userId === userId)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }
+  
+
+  async createActivity(insertActivity: InsertActivity): Promise<Activity> {
+    const id = this.currentActivityId++;
+    const now = new Date();
+    const activity: Activity = { 
+      ...insertActivity, 
+      id, 
+      timestamp: now
+    };
+    this.activities.set(id, activity);
+    return activity;
   }
 }
 

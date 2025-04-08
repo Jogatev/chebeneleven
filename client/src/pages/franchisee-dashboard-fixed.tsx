@@ -6,9 +6,11 @@ import { useAuth } from "@/hooks/use-auth";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import ActivityCard from "@/components/activity-card";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import ReportActions from "@/components/report-actions";
 import { 
   Form,
   FormControl,
@@ -58,6 +60,17 @@ export default function FranchiseeDashboard() {
   const [applicationStatusFilter, setApplicationStatusFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Add this with your other queries
+const {
+  data: activities,
+  isLoading: isActivitiesLoading,
+  error: activitiesError
+} = useQuery({
+  queryKey: ["/api/my-activities"],
+  // Only fetch when the activities tab is active
+  enabled: activeTab === "activities",
+});
 
   // Queries for job listings
   const { 
@@ -123,6 +136,7 @@ export default function FranchiseeDashboard() {
     mutationFn: async ({ id, status }: { id: number; status: string }) => {
       const res = await apiRequest("PATCH", `/api/jobs/${id}`, { status });
       return res.json();
+      
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/my-jobs"] });
@@ -137,6 +151,7 @@ export default function FranchiseeDashboard() {
         description: error.message || "There was an error updating the job",
         variant: "destructive",
       });
+      
     },
   });
 
@@ -178,9 +193,14 @@ export default function FranchiseeDashboard() {
   };
 
   // Handle job status change
-  const handleJobStatusChange = (jobId: number, newStatus: string) => {
+  const handleJobStatusChange = (jobId: number, newStatus: string) => {if (newStatus === "archived") 
+    if (window.confirm("Are you sure you want to archive this job listing? It will no longer be visible to applicants.")) {
     updateJobMutation.mutate({ id: jobId, status: newStatus });
-  };
+  }
+  else {
+    updateJobMutation.mutate({ id: jobId, status: newStatus });
+  }
+};
 
   // Handle application status change
   const handleApplicationStatusChange = (applicationId: number, newStatus: string) => {
@@ -295,32 +315,52 @@ export default function FranchiseeDashboard() {
                   >
                     Create Job
                   </TabsTrigger>
-                </TabsList>
+                    <TabsTrigger 
+                      value="activities"
+                      className="data-[state=active]:text-[#ff7a00] data-[state=active]:border-[#ff7a00] py-4 px-6 font-medium data-[state=active]:border-b-2 data-[state=inactive]:text-gray-500 data-[state=inactive]:border-transparent rounded-none"
+                    >
+                      Activities
+                    </TabsTrigger>
+                  </TabsList>
               </div>
 
               {/* Tab Content: Job Listings */}
               <TabsContent value="jobListings" className="p-0">
-                <div className="p-6 border-b border-gray-200">
-                  <div className="flex justify-between items-center flex-col sm:flex-row gap-3">
-                    <h2 className="text-xl font-semibold text-neutral-800">Your Job Listings</h2>
-                    <div className="flex space-x-2">
-                      <Select 
-                        value={jobStatusFilter} 
-                        onValueChange={setJobStatusFilter}
-                      >
-                        <SelectTrigger className="w-[180px]">
-                          <SelectValue placeholder="Filter by status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Statuses</SelectItem>
-                          <SelectItem value="active">Active</SelectItem>
-                          <SelectItem value="filled">Filled</SelectItem>
-                          <SelectItem value="closed">Closed</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </div>
+  <div className="p-6 border-b border-gray-200">
+    <div className="flex justify-between items-center flex-col sm:flex-row gap-3">
+      <h2 className="text-xl font-semibold text-neutral-800">Your Job Listings</h2>
+      <div className="flex space-x-2 items-center">
+        {/* Add Report Actions */}
+        <ReportActions 
+          reportTitle="7-Eleven Job Listings Report" 
+          reportData={filteredJobs} 
+          columns={[
+            { header: "Job Title", accessor: "title" },
+            { header: "Location", accessor: "location" },
+            { header: "Job Type", accessor: "jobType" },
+            { header: "Pay Range", accessor: "payRange" },
+            { header: "Status", accessor: "status" },
+            { header: "Created", accessor: "createdAt" },
+          ]} 
+        />
+        <Select 
+          value={jobStatusFilter} 
+          onValueChange={setJobStatusFilter}
+        >
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Filter by status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="filled">Filled</SelectItem>
+            <SelectItem value="closed">Closed</SelectItem>
+            <SelectItem value="archived">Archived</SelectItem> 
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  </div>
 
                 {/* Search Box */}
                 <div className="p-4 border-b border-gray-200">
@@ -556,6 +596,42 @@ export default function FranchiseeDashboard() {
                   )}
                 </div>
               </TabsContent>
+                  {/* Tab Content: Activities */}
+<TabsContent value="activities" className="p-0">
+  <div className="p-6">
+    <div className="flex justify-between items-center mb-4">
+      <h2 className="text-xl font-semibold text-neutral-800">Recent Activities</h2>
+      <ReportActions 
+        reportTitle="7-Eleven Activities Report" 
+        reportData={activities || []} 
+        columns={[
+          { header: "Action", accessor: "action" },
+          { header: "Entity Type", accessor: "entityType" },
+          { header: "Details", accessor: (row) => JSON.stringify(row.details) },
+          { header: "Date", accessor: "timestamp" },
+        ]} 
+      />
+    </div>
+    
+    {/* Activities list */}
+    <div className="space-y-4 mt-6">
+      {isActivitiesLoading ? (
+        <div className="text-center py-8">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+          <p className="mt-2 text-gray-500">Loading activities...</p>
+        </div>
+      ) : activities?.length ? (
+        activities.map((activity) => (
+          <ActivityCard key={activity.id} activity={activity} />
+        ))
+      ) : (
+        <div className="text-center py-8 border border-dashed border-gray-300 rounded-md">
+          <p className="text-gray-500">No activities found.</p>
+        </div>
+      )}
+    </div>
+  </div>
+</TabsContent>
 
               {/* Tab Content: Create Job */}
               <TabsContent value="createJob" className="p-0">

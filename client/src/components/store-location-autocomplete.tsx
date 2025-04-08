@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { Search, MapPin, Map, Building, Navigation } from "lucide-react";
+import { Search, MapPin, Map, Building, Navigation, Target } from "lucide-react";
 import GoogleMapComponent from "@/components/google-map-component";
 import {
   Dialog,
@@ -15,7 +15,12 @@ import {
   DialogTrigger,
   DialogFooter
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger
+} from "@/components/ui/tabs";
 
 interface StoreLocationAutocompleteProps {
   value: string;
@@ -36,6 +41,7 @@ export default function StoreLocationAutocomplete({
   const [mapOpen, setMapOpen] = useState(false);
   const [selectedTab, setSelectedTab] = useState("map");
   const [selectedLocation, setSelectedLocation] = useState<(typeof storeLocations)[0] | null>(null);
+  const [customLocation, setCustomLocation] = useState<any>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
@@ -44,15 +50,6 @@ export default function StoreLocationAutocomplete({
     // This would normally use real proximity detection, but for this demo
     // we'll just use the first 5 locations
     setNearbyLocations(storeLocations.slice(0, 5));
-
-    // In a real implementation, we would use the user's franchisee location:
-    // if (user?.franchiseeName) {
-    //   const franchiseeLocation = { lat: x, lng: y };
-    //   const sorted = storeLocations.sort((a, b) => {
-    //     return getDistance(franchiseeLocation, a.coordinates) - getDistance(franchiseeLocation, b.coordinates);
-    //   });
-    //   setNearbyLocations(sorted.slice(0, 5));
-    // }
   }, [user]);
 
   // Filter suggestions based on query
@@ -104,10 +101,16 @@ export default function StoreLocationAutocomplete({
     }
   }, [mapOpen, query, value]);
 
-  const handleSelectLocation = (location: (typeof storeLocations)[0]) => {
+  const handleSelectLocation = (location: (typeof storeLocations)[0] | any) => {
     setQuery(location.fullAddress);
     onChange(location.fullAddress);
     setSelectedLocation(location);
+    
+    // If it's a custom location, store it separately
+    if (location.id.toString().startsWith('custom-') || location.id.toString().startsWith('search-')) {
+      setCustomLocation(location);
+    }
+    
     setIsFocused(false);
   };
 
@@ -145,11 +148,11 @@ export default function StoreLocationAutocomplete({
               <Map size={18} />
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[700px]">
+          <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-hidden">
             <DialogHeader>
-              <DialogTitle>Select 7-Eleven Store Location</DialogTitle>
+              <DialogTitle>Select Store Location</DialogTitle>
               <DialogDescription>
-                Choose the store location for this job posting using the map or list view.
+                Choose a store location or add a custom location by clicking on the map.
               </DialogDescription>
             </DialogHeader>
             
@@ -171,9 +174,16 @@ export default function StoreLocationAutocomplete({
                     locations={storeLocations}
                     onSelectLocation={(location) => {
                       setSelectedLocation(location);
+                      
+                      // If it's a custom location, store it separately
+                      if (location.id.toString().startsWith('custom-') || location.id.toString().startsWith('search-')) {
+                        setCustomLocation(location);
+                      }
+                      
                       setSelectedTab("list"); // Switch to list to show selection
                     }}
                     selectedLocation={selectedLocation}
+                    allowCustomPin={true} // Enable custom pin creation
                   />
                 </div>
               </TabsContent>
@@ -190,6 +200,30 @@ export default function StoreLocationAutocomplete({
                     />
                   </div>
                   <div className="grid grid-cols-1 gap-1 p-2 max-h-[300px] overflow-y-auto">
+                    {customLocation && (
+                      <div 
+                        className={cn(
+                          "flex items-start p-3 border rounded-md hover:bg-green-50 cursor-pointer transition-colors mb-2",
+                          selectedLocation?.id === customLocation.id ? "bg-green-50 border-green-300" : "border-green-200 bg-green-50/50"
+                        )}
+                        onClick={() => setSelectedLocation(customLocation)}
+                      >
+                        <Target className={cn(
+                          "h-5 w-5 mr-2 flex-shrink-0 mt-1", 
+                          selectedLocation?.id === customLocation.id ? "text-green-600" : "text-green-500"
+                        )} />
+                        <div>
+                          <div className="font-medium">Custom Location</div>
+                          <div className="text-sm text-gray-600">{customLocation.fullAddress}</div>
+                          {selectedLocation?.id === customLocation.id && (
+                            <div className="flex items-center text-xs text-green-600 mt-1">
+                              <Navigation size={12} className="mr-1" /> Selected location
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
                     {(suggestions.length > 0 ? suggestions : nearbyLocations).map(location => (
                       <div 
                         key={location.id}
@@ -215,9 +249,9 @@ export default function StoreLocationAutocomplete({
                       </div>
                     ))}
                     
-                    {suggestions.length === 0 && nearbyLocations.length === 0 && (
+                    {suggestions.length === 0 && nearbyLocations.length === 0 && !customLocation && (
                       <div className="p-4 text-center text-gray-500">
-                        No locations found. Try a different search term.
+                        No locations found. Try a different search term or add a custom location.
                       </div>
                     )}
                   </div>
@@ -228,10 +262,18 @@ export default function StoreLocationAutocomplete({
             {selectedLocation && (
               <div className="mt-4 p-3 bg-blue-50 rounded-md border border-blue-200">
                 <div className="flex items-start">
-                  <MapPin className="h-5 w-5 text-blue-500 mr-2 flex-shrink-0 mt-1" />
+                  {selectedLocation.id.toString().startsWith('custom-') || selectedLocation.id.toString().startsWith('search-') ? (
+                    <Target className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-1" />
+                  ) : (
+                    <MapPin className="h-5 w-5 text-blue-500 mr-2 flex-shrink-0 mt-1" />
+                  )}
                   <div>
                     <div className="font-medium">Selected Location:</div>
-                    <div className="text-sm">{selectedLocation.name}</div>
+                    <div className="text-sm">
+                      {selectedLocation.id.toString().startsWith('custom-') || selectedLocation.id.toString().startsWith('search-') 
+                        ? 'Custom Location' 
+                        : selectedLocation.name}
+                    </div>
                     <div className="text-sm text-gray-600">{selectedLocation.fullAddress}</div>
                   </div>
                 </div>
@@ -254,12 +296,25 @@ export default function StoreLocationAutocomplete({
       </div>
 
       {/* Suggestions dropdown */}
-      {isFocused && suggestions.length > 0 && (
+      {isFocused && (customLocation || suggestions.length > 0) && (
         <div
           ref={suggestionsRef}
           className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto"
         >
           <ul className="py-1">
+            {customLocation && (
+              <li
+                className="px-4 py-2 hover:bg-green-50 cursor-pointer flex items-start bg-green-50/30"
+                onClick={() => handleSelectLocation(customLocation)}
+              >
+                <Target className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-1" />
+                <div>
+                  <div className="font-medium">Custom Location</div>
+                  <div className="text-sm text-gray-600">{customLocation.fullAddress}</div>
+                </div>
+              </li>
+            )}
+            
             {suggestions.map((location) => (
               <li
                 key={location.id}

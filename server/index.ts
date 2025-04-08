@@ -37,6 +37,31 @@ app.use((req, res, next) => {
   next();
 });
 
+// Add error handling middleware for HTML responses
+app.use((req, res, next) => {
+  const originalSend = res.send;
+  
+  res.send = function(body) {
+    // Log all API responses for debugging
+    if (req.path.startsWith('/api')) {
+      console.log(`API Response for ${req.method} ${req.path}:`);
+      try {
+        // If it's a string that starts with <!DOCTYPE, it's HTML
+        if (typeof body === 'string' && body.startsWith('<!DOCTYPE')) {
+          console.error('HTML response being sent instead of JSON for', req.path);
+          console.error(body.substring(0, 200) + '...');
+        }
+      } catch (e) {
+        console.error('Error logging response:', e);
+      }
+    }
+    
+    return originalSend.call(this, body);
+  };
+  
+  next();
+});
+
 (async () => {
   // Set up file upload middleware
   setupFileUpload(app);

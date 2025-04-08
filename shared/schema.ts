@@ -32,7 +32,7 @@ export const jobListings = pgTable("job_listings", {
   department: text("department"), // Optional department
   payRange: text("pay_range"),
   benefits: text("benefits"),
-  status: text("status").notNull().default("active"), // active, filled, closed
+  status: text("status").notNull().default("active"), // active, filled, closed, archived
   createdAt: timestamp("created_at").defaultNow().notNull(),
   closingDate: timestamp("closing_date"),
   // Store tags as JSON
@@ -130,3 +130,18 @@ export type JobListing = typeof jobListings.$inferSelect;
 
 export type InsertApplication = z.infer<typeof insertApplicationSchema>;
 export type Application = typeof applications.$inferSelect;
+export const activities = pgTable("activities", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  action: text("action").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: integer("entity_id").notNull(),
+  details: json("details").$type<Record<string, any>>().default({}),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+});
+
+export type Activity = typeof activities.$inferSelect;
+export type InsertActivity = typeof activities.$inferInsert;
+
+// Create the schema for inserting activities
+export const insertActivitySchema = createInsertSchema(activities);

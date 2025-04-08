@@ -25,47 +25,46 @@ export default function ApplicantPortal() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real app, we would make an API call with filters
-    // For this demo, we'll just log the search params
+   
     console.log("Searching for:", { keyword, location, minSalary, maxSalary });
   };
 
-  // Handle job card click to navigate to application form
+  
   const handleJobSelect = (jobId: number) => {
     setLocation(`/apply/${jobId}`);
   };
 
-  // Handle back button click
+ 
   const handleBackToSelection = () => {
     setLocation("/");
   };
 
-  // Filter and sort jobs
+ 
   const filteredJobs = jobs 
     ? jobs.filter(job => {
-        // Keyword filter
+        
         const matchesKeyword = !keyword || keyword === "all" || 
           job.title.toLowerCase().includes(keyword.toLowerCase()) ||
           job.description.toLowerCase().includes(keyword.toLowerCase());
         
-        // Location filter
+        
         const matchesLocation = !location || 
           job.location.toLowerCase().includes(location.toLowerCase());
         
-        // Salary range filter
+        
         let matchesSalary = true;
         
         if (job.payRange) {
-          // Extract numbers from the payRange string
+         
           const salaryNumbers = job.payRange.match(/\d+/g);
           if (salaryNumbers && salaryNumbers.length > 0) {
-            // Get the job salary values (use first number as min, last as max if multiple exist)
+            
             const jobMinSalary = parseInt(salaryNumbers[0]);
             const jobMaxSalary = salaryNumbers.length > 1 ? 
                                 parseInt(salaryNumbers[salaryNumbers.length - 1]) : 
                                 jobMinSalary;
             
-            // Check if job salary is within the user-specified range
+           
             if (minSalary && parseInt(minSalary) > jobMaxSalary) {
               matchesSalary = false;
             }
@@ -75,7 +74,7 @@ export default function ApplicantPortal() {
             }
           }
         } else if (minSalary) {
-          // If job has no salary info but user specified min salary, don't match
+          
           matchesSalary = false;
         }
         
@@ -87,7 +86,7 @@ export default function ApplicantPortal() {
     if (sortOrder === "newest") {
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     } else if (sortOrder === "relevance") {
-      // Simple relevance sorting (just an example)
+      
       return a.title.localeCompare(b.title);
     } else { // "a-z"
       return a.title.localeCompare(b.title);
@@ -104,12 +103,12 @@ export default function ApplicantPortal() {
 
       <main className="flex-grow p-4">
         <div className="max-w-7xl mx-auto">
-          {/* Hero Banner with Search */}
+         
           <div className="bg-[#00703c] text-white rounded-lg p-6 md:p-10 mb-8">
             <h1 className="text-3xl md:text-4xl font-bold mb-4">Find Your Career at 7-Eleven</h1>
             <p className="text-lg mb-6">Discover opportunities with 7-Eleven franchisees in your area</p>
             
-            {/* Search and Filter Form */}
+            
             <form onSubmit={handleSearch} className="bg-white rounded-lg p-4 text-neutral-800">
               <div className="space-y-4">
                 <div className="grid md:grid-cols-2 gap-4">
@@ -257,13 +256,13 @@ export default function ApplicantPortal() {
                   <div className="flex space-x-2">
                     <Button
                       variant="outline"
-                      disabled={true} // First page in this demo
+                      disabled={true} 
                     >
                       Previous
                     </Button>
                     <Button
                       variant="outline"
-                      disabled={sortedJobs.length >= jobs.length} // Last page in this demo
+                      disabled={sortedJobs.length >= jobs.length}
                     >
                       Next
                     </Button>

@@ -2,11 +2,18 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
-import { insertJobListingSchema, insertApplicationSchema } from "@shared/schema";
+import { insertJobListingSchema, insertApplicationSchema, insertActivitySchema } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
 import { sendApplicationConfirmation, sendStatusUpdateEmail } from "./email-service";
-
 export async function registerRoutes(app: Express): Promise<Server> {
+  console.log("Starting route registration...");
+  
+  // Simple test route
+  app.get("/api/test", (req, res) => {
+    console.log("Test route accessed");
+    res.json({ message: "Test route working!" });
+  });
+  
   // Set up authentication routes (/api/register, /api/login, /api/logout, /api/user)
   setupAuth(app);
 
@@ -84,6 +91,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const job = await storage.createJob(parseResult.data);
+
+      // Log the activity with debugging
+      console.log(`Logging job creation activity for user ${req.user.id}, job ${job.id}`);
+      try {
+        const activity = await storage.createActivity({
+          userId: req.user.id,
+          action: "created_job",
+          entityType: "job",
+          entityId: job.id,
+          details: { jobTitle: job.title, location: job.location }
+        });
+        console.log("Activity logged:", activity);
+      } catch (activityError) {
+        console.error("Error logging activity:", activityError);
+      }
+      
       res.status(201).json(job);
     } catch (error) {
       console.error("Error creating job:", error);
@@ -111,6 +134,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const updatedJob = await storage.updateJob(jobId, req.body);
+
+      // Log the activity if status was updated
+      if (req.body.status) {
+        console.log(`Logging job status update activity: ${job.status} -> ${req.body.status}`);
+        try {
+          await storage.createActivity({
+            userId: req.user.id,
+            action: "updated_job_status",
+            entityType: "job",
+            entityId: jobId,
+            details: { 
+              jobTitle: updatedJob.title,
+              newStatus: req.body.status,
+              previousStatus: job.status
+            }
+          });
+        } catch (activityError) {
+          console.error("Error logging status update activity:", activityError);
+        }
+      } 
+      // Log other updates
+      else if (Object.keys(req.body).length > 0) {
+        console.log(`Logging job update activity for fields: ${Object.keys(req.body).join(", ")}`);
+        try {
+          await storage.createActivity({
+            userId: req.user.id,
+            action: "updated_job",
+            entityType: "job",
+            entityId: jobId,
+            details: { 
+              jobTitle: updatedJob.title,
+              updatedFields: Object.keys(req.body).join(", ")
+            }
+          });
+        } catch (activityError) {
+          console.error("Error logging job update activity:", activityError);
+        }
+      }
+      
       res.json(updatedJob);
     } catch (error) {
       console.error("Error updating job:", error);
@@ -135,6 +197,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if the authenticated user owns this job
       if (job.userId !== req.user.id) {
         return res.status(403).json({ error: "Forbidden: You do not own this job listing" });
+      }
+      
+      // Log the activity before deleting the job
+      console.log(`Logging job deletion activity for job ${jobId}`);
+      try {
+        await storage.createActivity({
+          userId: req.user.id,
+          action: "deleted_job",
+          entityType: "job",
+          entityId: jobId,
+          details: { 
+            jobTitle: job.title,
+            location: job.location
+          }
+        });
+      } catch (activityError) {
+        console.error("Error logging job deletion activity:", activityError);
       }
       
       await storage.deleteJob(jobId);
@@ -185,6 +264,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
             application.referenceId
           );
           console.log("Application confirmation email sent:", emailResult);
+          
+          // Log activity for the job owner (franchisee)
+          console.log(`Logging application received activity for user ${jobDetails.userId}`);
+          try {
+            await storage.createActivity({
+              userId: jobDetails.userId,
+              action: "received_application",
+              entityType: "application",
+              entityId: application.id,
+              details: { 
+                applicantName: `${application.firstName} ${application.lastName}`,
+                jobTitle: jobDetails.title
+              }
+            });
+          } catch (activityError) {
+            console.error("Error logging application received activity:", activityError);
+          }
         }
       } catch (emailError) {
         console.error("Error sending confirmation email:", emailError);
@@ -253,169 +349,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`Found ${matchedApplications.length} applications for user's jobs`);
       
       if (matchedApplications.length === 0) {
-        console.log("No applications found for user's jobs after direct matching");
         return res.json([]);
       }
       
-      // Return with job information joined
-      const applicationsWithJobInfo = await Promise.all(
+      // Add job details to each application
+      const applicationsWithJobDetails = await Promise.all(
         matchedApplications.map(async (app) => {
           const job = await storage.getJobById(app.jobId);
-          
           return {
             ...app,
-            jobTitle: job ? job.title : 'Unknown Job',
-            jobLocation: job ? job.location : 'Unknown Location',
-            status: app.status || 'submitted' // Ensure status exists
+            jobTitle: job ? job.title : "Unknown Job",
+            jobLocation: job ? job.location : "Unknown Location"
           };
         })
       );
       
-      console.log(`Returning ${applicationsWithJobInfo.length} applications with job info`);
-      res.json(applicationsWithJobInfo);
+      res.json(applicationsWithJobDetails);
     } catch (error) {
       console.error("Error getting applications:", error);
       res.status(500).json({ error: "Failed to retrieve applications" });
     }
   });
-  
-  // For debugging - get all applications in the system
-  app.get("/api/debug/all-applications", async (req, res) => {
-    try {
-      const allApplications = await storage.getApplications();
-      
-      // Debug each application's jobId and type
-      const appsWithTypes = allApplications.map(app => ({
-        ...app,
-        jobId_type: typeof app.jobId
-      }));
-      
-      res.json({
-        count: allApplications.length,
-        applications: appsWithTypes
-      });
-    } catch (error) {
-      console.error("Error getting all applications:", error);
-      res.status(500).json({ error: "Failed to retrieve applications" });
-    }
-  });
-  
-  // Special debug endpoint for franchisee applications
-  app.get("/api/debug/my-applications/:userId", async (req, res) => {
-    try {
-      const userId = parseInt(req.params.userId);
-      
-      // First get all jobs for this user
-      const userJobs = await storage.getJobsByUserId(userId);
-      const userJobIds = userJobs.map(job => job.id);
-      
-      // Get all applications
-      const allApplications = await storage.getApplications();
-      
-      // Debug info about applications and matching
-      const debugInfo: {
-        userId: number;
-        userJobs: any[];
-        userJobIds: number[];
-        allApplications: any[];
-        matchedApplications: any[];
-      } = {
-        userId: userId,
-        userJobs: userJobs,
-        userJobIds: userJobIds,
-        allApplications: allApplications,
-        matchedApplications: []
-      };
-      
-      // Manual matching to debug the issue
-      const matchedApps: any[] = [];
-      
-      for (const app of allApplications) {
-        const appJobId = typeof app.jobId === 'string' ? parseInt(app.jobId) : app.jobId;
-        
-        console.log(`Checking application ${app.id} for job ${appJobId}, user jobs are: ${userJobIds.join(',')}`);
-        
-        if (userJobIds.includes(appJobId)) {
-          console.log(`Match found: Application ${app.id} matches job ${appJobId}`);
-          matchedApps.push({
-            ...app,
-            matched: true,
-            appJobId_type: typeof app.jobId,
-            appJobId_converted: appJobId
-          });
-        } else {
-          console.log(`No match: Application ${app.id} with job ${appJobId} doesn't match user jobs`);
-        }
-      }
-      
-      debugInfo.matchedApplications = matchedApps;
-      
-      res.json(debugInfo);
-    } catch (error) {
-      console.error("Error in debug endpoint:", error);
-      res.status(500).json({ error: "Debug operation failed" });
-    }
-  });
-  
-  // For debugging - create a test application
-  app.get("/api/debug/create-test-application/:jobId", async (req, res) => {
-    try {
-      const jobId = parseInt(req.params.jobId);
-      
-      // Verify the job exists
-      const job = await storage.getJobById(jobId);
-      if (!job) {
-        return res.status(404).json({ error: "Job not found" });
-      }
-      
-      // Create a test application
-      const testApplication = {
-        jobId: jobId,
-        referenceId: `TEST-${Date.now()}`, // Add a reference ID for testing
-        firstName: "Test",
-        lastName: "Applicant",
-        email: "test@example.com",
-        phone: "123-456-7890",
-        address: "123 Test St",
-        city: "Test City",
-        zipCode: "12345",
-        resumeUrl: "",
-        experience: "3 years of experience in test applications",
-        education: "Bachelor's in Testing",
-        coverLetter: "This is a test application created for debugging",
-        availableShifts: ["morning", "evening"],
-        status: "submitted"
-      };
-      
-      const createdApplication = await storage.createApplication(testApplication);
-      
-      // Check that the application was linked to the job correctly
-      const jobApplications = await storage.getApplicationsByJobId(jobId);
-      const userApplications = await storage.getApplicationsForUser(job.userId);
-      
-      res.json({
-        createdApplication,
-        jobApplicationsCount: jobApplications.length,
-        userApplicationsCount: userApplications.length,
-        jobOwner: job.userId
-      });
-    } catch (error) {
-      console.error("Error creating test application:", error);
-      res.status(500).json({ error: "Failed to create test application" });
-    }
-  });
 
   // Get applications for a specific job (requires auth)
-  app.get("/api/jobs/:id/applications", async (req, res) => {
+  app.get("/api/applications/job/:jobId", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
     try {
-      const jobId = parseInt(req.params.id);
+      const jobId = parseInt(req.params.jobId);
       const job = await storage.getJobById(jobId);
       
-      // Check if job exists
       if (!job) {
         return res.status(404).json({ error: "Job not found" });
       }
@@ -425,11 +390,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Forbidden: You do not own this job listing" });
       }
       
-      const applications = await storage.getApplicationsByJobId(jobId);
-      res.json(applications);
+      // Get applications for this job
+      const allApplications = await storage.getApplications();
+      const jobApplications = allApplications.filter(app => {
+        // Ensure jobId is a number for comparison
+        const appJobId = typeof app.jobId === 'string' ? parseInt(app.jobId) : app.jobId;
+        return appJobId === jobId;
+      });
+      
+      console.log(`Found ${jobApplications.length} applications for job ${jobId}`);
+      
+      res.json(jobApplications);
     } catch (error) {
-      console.error("Error getting job applications:", error);
-      res.status(500).json({ error: "Failed to retrieve applications for this job" });
+      console.error(`Error getting applications for job ${req.params.jobId}:`, error);
+      res.status(500).json({ error: "Failed to retrieve applications" });
+    }
+  });
+
+  // Get application by ID (requires auth)
+  app.get("/api/applications/:id", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+      const applicationId = parseInt(req.params.id);
+      const application = await storage.getApplicationById(applicationId);
+      
+      if (!application) {
+        return res.status(404).json({ error: "Application not found" });
+      }
+      
+      // Check if the authenticated user owns the job this application is for
+      const job = await storage.getJobById(application.jobId);
+      if (!job || job.userId !== req.user.id) {
+        return res.status(403).json({ error: "Forbidden: You do not own this job listing" });
+      }
+      
+      res.json(application);
+    } catch (error) {
+      console.error("Error getting application:", error);
+      res.status(500).json({ error: "Failed to retrieve application" });
     }
   });
 
@@ -447,52 +448,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Application not found" });
       }
       
-      // Get the job to check ownership
-      const job = await storage.getJobById(application.jobId);
-      
-      if (!job) {
-        return res.status(404).json({ error: "Associated job not found" });
-      }
-      
       // Check if the authenticated user owns the job this application is for
-      if (job.userId !== req.user.id) {
+      const job = await storage.getJobById(application.jobId);
+      if (!job || job.userId !== req.user.id) {
         return res.status(403).json({ error: "Forbidden: You do not own this job listing" });
       }
       
-      // Only allow status updates
-      if (!req.body.status) {
-        return res.status(400).json({ error: "Status field is required" });
+      console.log(`Updating application ${applicationId} with data:`, req.body);
+      const { status } = req.body;
+      
+      // Validate status (only status updates supported for now)
+      if (!status) {
+        return res.status(400).json({ error: "Status is required" });
       }
       
-      // Validate status value
-      const validStatuses = ["submitted", "under_review", "interviewed", "accepted", "rejected"];
-      if (!validStatuses.includes(req.body.status)) {
-        return res.status(400).json({ error: "Invalid status value" });
+      const allowedStatuses = ["submitted", "under_review", "interview", "interviewed", "accepted", "rejected"];
+      if (!allowedStatuses.includes(status)) {
+        return res.status(400).json({ 
+          error: `Invalid status. Allowed values: ${allowedStatuses.join(", ")}` 
+        });
       }
       
-      const updatedApplication = await storage.updateApplication(applicationId, { status: req.body.status });
+      const previousStatus = application.status || "submitted";
+      const updatedApplication = await storage.updateApplication(applicationId, { status });
       
-      if (!updatedApplication) {
-        return res.status(404).json({ error: "Failed to update application" });
-      }
-
-      // If application is accepted, mark the job as filled
-      if (req.body.status === "accepted") {
-        await storage.updateJob(job.id, { status: "filled" });
-      }
-      
-      // Send status update email notification
+      // Log the activity
+      console.log(`Logging application status update activity: ${previousStatus} -> ${status}`);
       try {
-        // Only send emails for significant status changes (not every review status)
-        const significantStatuses = ["under_review", "interviewed", "accepted", "rejected"];
-        if (significantStatuses.includes(req.body.status)) {
+        await storage.createActivity({
+          userId: req.user.id,
+          action: "updated_application_status",
+          entityType: "application",
+          entityId: applicationId,
+          details: { 
+            applicantName: `${application.firstName} ${application.lastName}`,
+            jobTitle: job.title,
+            previousStatus,
+            newStatus: status
+          }
+        });
+      } catch (activityError) {
+        console.error("Error logging status update activity:", activityError);
+      }
+      
+      // Send status update email to applicant
+      try {
+        if (application.email) {
           const emailResult = await sendStatusUpdateEmail(
-            updatedApplication,
+            application,
             job,
-            updatedApplication.referenceId,
-            req.body.status
+            status,
+            application.referenceId
           );
-          console.log(`Status update email sent for application ${applicationId}:`, emailResult);
+          console.log("Status update email sent:", emailResult);
         }
       } catch (emailError) {
         console.error("Error sending status update email:", emailError);
@@ -505,83 +513,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to update application" });
     }
   });
-  
-  // Application notes
-  app.post("/api/applications/:id/notes", async (req, res) => {
+
+  // Activities routes
+  // Get activities for a franchisee (requires auth)
+  app.get("/api/my-activities", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
     try {
-      const applicationId = parseInt(req.params.id);
-      const { note } = req.body;
+      const userId = req.user.id;
+      const activities = await storage.getActivitiesByUserId(userId);
       
-      if (!note) {
-        return res.status(400).json({ error: "Note content is required" });
-      }
+      // Sort activities by createdAt descending (newest first)
+      activities.sort((a, b) => {
+        const dateA = new Date(a.createdAt || 0).getTime();
+        const dateB = new Date(b.createdAt || 0).getTime();
+        return dateB - dateA;
+      });
       
-      // Check if application exists and user has permission
-      const application = await storage.getApplicationById(applicationId);
-      if (!application) {
-        return res.status(404).json({ error: "Application not found" });
-      }
-      
-      // Get the job to check ownership
-      const job = await storage.getJobById(application.jobId);
-      if (!job) {
-        return res.status(404).json({ error: "Associated job not found" });
-      }
-      
-      // Check if the authenticated user owns the job this application is for
-      if (job.userId !== req.user.id) {
-        return res.status(403).json({ error: "Forbidden: You do not own this job listing" });
-      }
-      
-      const success = await storage.saveApplicationNote(applicationId, note);
-      if (!success) {
-        return res.status(404).json({ error: "Failed to save note" });
-      }
-      
-      res.status(201).json({ message: "Note saved successfully" });
+      res.json(activities);
     } catch (error) {
-      console.error("Error saving application note:", error);
-      res.status(500).json({ error: "Failed to save note" });
+      console.error("Error getting activities:", error);
+      res.status(500).json({ error: "Failed to retrieve activities" });
     }
   });
 
-  app.get("/api/applications/:id/notes", async (req, res) => {
+  // Create an activity log (requires auth)
+  app.post("/api/activities", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
     try {
-      const applicationId = parseInt(req.params.id);
+      // Include the user ID from the authenticated user
+      const activityData = { ...req.body, userId: req.user.id };
       
-      // Check if application exists and user has permission
-      const application = await storage.getApplicationById(applicationId);
-      if (!application) {
-        return res.status(404).json({ error: "Application not found" });
+      // Validate the activity data
+      const parseResult = insertActivitySchema.safeParse(activityData);
+      if (!parseResult.success) {
+        const validationError = fromZodError(parseResult.error);
+        return res.status(400).json({ error: validationError.message });
       }
       
-      // Get the job to check ownership
-      const job = await storage.getJobById(application.jobId);
-      if (!job) {
-        return res.status(404).json({ error: "Associated job not found" });
-      }
-      
-      // Check if the authenticated user owns the job this application is for
-      if (job.userId !== req.user.id) {
-        return res.status(403).json({ error: "Forbidden: You do not own this job listing" });
-      }
-      
-      const note = await storage.getApplicationNote(applicationId);
-      res.json({ note: note || "" });
+      const activity = await storage.createActivity(parseResult.data);
+      res.status(201).json(activity);
     } catch (error) {
-      console.error("Error getting application note:", error);
-      res.status(500).json({ error: "Failed to retrieve note" });
+      console.error("Error creating activity:", error);
+      res.status(500).json({ error: "Failed to create activity log" });
     }
   });
 
-  const httpServer = createServer(app);
-  return httpServer;
+  // Start the server
+  const server = createServer(app);
+  return server;
 }
