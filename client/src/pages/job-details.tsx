@@ -17,7 +17,7 @@ import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/hooks/use-auth";
 import ApplicationCard from "@/components/application-card";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Loader2, Edit } from "lucide-react";
+import { Loader2, Edit, Archive } from "lucide-react";
 
 export default function JobDetails() {
   const { user } = useAuth();
@@ -178,21 +178,52 @@ export default function JobDetails() {
 
         <TabsContent value="details">
           <Card>
-            <CardHeader className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4 pb-4 sm:pb-6">
-              <div>
-                <CardTitle className="text-xl sm:text-2xl">{job.title}</CardTitle>
-                <CardDescription className="mt-1">
-                  {job.location} • {formatJobType(job.jobType || "full_time")}
-                </CardDescription>
-              </div>
-              <Button
-                variant="outline"
-                className="flex items-center gap-1 w-full sm:w-auto justify-center sm:justify-start"
-                onClick={() => setLocation(`/edit-job/${job.id}`)}
-              >
-                <Edit size={16} /> Edit Job
-              </Button>
-            </CardHeader>
+          // In the CardHeader section where the Edit button is
+<CardHeader className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4 pb-4 sm:pb-6">
+  <div>
+    <CardTitle className="text-xl sm:text-2xl">{job.title}</CardTitle>
+    <CardDescription className="mt-1">
+      {job.location} • {formatJobType(job.jobType || "full_time")}
+    </CardDescription>
+  </div>
+  <div className="flex gap-2">
+    <Button
+      variant="outline"
+      className="flex items-center gap-1 w-full sm:w-auto justify-center sm:justify-start"
+      onClick={() => setLocation(`/edit-job/${job.id}`)}
+    >
+      <Edit size={16} /> Edit Job
+    </Button>
+    
+    {/* Add Archive button - only show if not already archived */}
+    {job.status !== "archived" && (
+      <Button
+        variant="outline"
+        className="flex items-center gap-1 w-full sm:w-auto justify-center sm:justify-start text-gray-600 hover:text-gray-900"
+        onClick={async () => {
+          if (confirm(`Are you sure you want to archive the job "${job.title}"? It will no longer be visible to applicants.`)) {
+            try {
+              await apiRequest("PATCH", `/api/jobs/${job.id}`, { status: "archived" });
+              toast({
+                title: "Job Archived",
+                description: "The job has been archived successfully",
+              });
+              queryClient.invalidateQueries({ queryKey: ["/api/jobs", job.id] });
+            } catch (error) {
+              toast({
+                title: "Archive failed",
+                description: error.message,
+                variant: "destructive",
+              });
+            }
+          }
+        }}
+      >
+        <Archive size={16} /> Archive Job
+      </Button>
+    )}
+  </div>
+</CardHeader>
 
             <CardContent className="px-4 sm:px-6">
               <div className="space-y-4 sm:space-y-6">

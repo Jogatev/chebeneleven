@@ -203,6 +203,7 @@ function JobDetails() {
                     applications && applications.length > 0 && (React.createElement("span", { className: "ml-1 bg-primary text-primary-foreground rounded-full px-2 py-0.5 text-xs" }, applications.length)))),
             React.createElement(tabs_1.TabsContent, { value: "details" },
                 React.createElement(card_1.Card, null,
+                    "// In the CardHeader section where the Edit button is",
                     React.createElement(card_1.CardHeader, { className: "flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4 pb-4 sm:pb-6" },
                         React.createElement("div", null,
                             React.createElement(card_1.CardTitle, { className: "text-xl sm:text-2xl" }, job.title),
@@ -210,9 +211,42 @@ function JobDetails() {
                                 job.location,
                                 " \u2022 ",
                                 formatJobType(job.jobType || "full_time"))),
-                        React.createElement(button_1.Button, { variant: "outline", className: "flex items-center gap-1 w-full sm:w-auto justify-center sm:justify-start", onClick: function () { return setLocation("/edit-job/" + job.id); } },
-                            React.createElement(lucide_react_1.Edit, { size: 16 }),
-                            " Edit Job")),
+                        React.createElement("div", { className: "flex gap-2" },
+                            React.createElement(button_1.Button, { variant: "outline", className: "flex items-center gap-1 w-full sm:w-auto justify-center sm:justify-start", onClick: function () { return setLocation("/edit-job/" + job.id); } },
+                                React.createElement(lucide_react_1.Edit, { size: 16 }),
+                                " Edit Job"),
+                            job.status !== "archived" && (React.createElement(button_1.Button, { variant: "outline", className: "flex items-center gap-1 w-full sm:w-auto justify-center sm:justify-start text-gray-600 hover:text-gray-900", onClick: function () { return __awaiter(_this, void 0, void 0, function () {
+                                    var error_3;
+                                    return __generator(this, function (_a) {
+                                        switch (_a.label) {
+                                            case 0:
+                                                if (!confirm("Are you sure you want to archive the job \"" + job.title + "\"? It will no longer be visible to applicants.")) return [3 /*break*/, 4];
+                                                _a.label = 1;
+                                            case 1:
+                                                _a.trys.push([1, 3, , 4]);
+                                                return [4 /*yield*/, queryClient_1.apiRequest("PATCH", "/api/jobs/" + job.id, { status: "archived" })];
+                                            case 2:
+                                                _a.sent();
+                                                toast({
+                                                    title: "Job Archived",
+                                                    description: "The job has been archived successfully"
+                                                });
+                                                queryClient_1.queryClient.invalidateQueries({ queryKey: ["/api/jobs", job.id] });
+                                                return [3 /*break*/, 4];
+                                            case 3:
+                                                error_3 = _a.sent();
+                                                toast({
+                                                    title: "Archive failed",
+                                                    description: error_3.message,
+                                                    variant: "destructive"
+                                                });
+                                                return [3 /*break*/, 4];
+                                            case 4: return [2 /*return*/];
+                                        }
+                                    });
+                                }); } },
+                                React.createElement(lucide_react_1.Archive, { size: 16 }),
+                                " Archive Job")))),
                     React.createElement(card_1.CardContent, { className: "px-4 sm:px-6" },
                         React.createElement("div", { className: "space-y-4 sm:space-y-6" },
                             React.createElement("div", null,

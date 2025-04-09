@@ -69,6 +69,7 @@ function registerRoutes(app) {
             auth_1.setupAuth(app);
             // Job Listings Routes
             // Get all job listings (publicly accessible)
+            // Get all job listings (publicly accessible)
             app.get("/api/jobs", function (req, res) { return __awaiter(_this, void 0, void 0, function () {
                 var jobs, activeJobs, error_1;
                 return __generator(this, function (_a) {
@@ -90,9 +91,65 @@ function registerRoutes(app) {
                     }
                 });
             }); });
+            // If you want a specific archive endpoint, add this:
+            app.post("/api/jobs/:id/archive", function (req, res) { return __awaiter(_this, void 0, void 0, function () {
+                var jobId, job, updatedJob, error_2;
+                return __generator(this, function (_a) {
+                    switch (_a.label) {
+                        case 0:
+                            if (!req.isAuthenticated()) {
+                                return [2 /*return*/, res.status(401).json({ error: "Unauthorized" })];
+                            }
+                            _a.label = 1;
+                        case 1:
+                            _a.trys.push([1, 5, , 6]);
+                            jobId = parseInt(req.params.id);
+                            return [4 /*yield*/, storage_1.storage.getJobById(jobId)];
+                        case 2:
+                            job = _a.sent();
+                            if (!job) {
+                                return [2 /*return*/, res.status(404).json({ error: "Job not found" })];
+                            }
+                            // Check if the authenticated user owns this job
+                            if (job.userId !== req.user.id) {
+                                return [2 /*return*/, res.status(403).json({ error: "Forbidden: You do not own this job listing" })];
+                            }
+                            // Check if job is already archived
+                            if (job.status === "archived") {
+                                return [2 /*return*/, res.status(400).json({ error: "Job is already archived" })];
+                            }
+                            return [4 /*yield*/, storage_1.storage.updateJob(jobId, { status: "archived" })];
+                        case 3:
+                            updatedJob = _a.sent();
+                            // Log the archive activity
+                            return [4 /*yield*/, storage_1.storage.createActivity({
+                                    userId: req.user.id,
+                                    action: "updated_job_status",
+                                    entityType: "job",
+                                    entityId: jobId,
+                                    details: {
+                                        jobTitle: updatedJob.title,
+                                        previousStatus: job.status,
+                                        newStatus: "archived"
+                                    }
+                                })];
+                        case 4:
+                            // Log the archive activity
+                            _a.sent();
+                            res.json(updatedJob);
+                            return [3 /*break*/, 6];
+                        case 5:
+                            error_2 = _a.sent();
+                            console.error("Error archiving job:", error_2);
+                            res.status(500).json({ error: "Failed to archive job listing" });
+                            return [3 /*break*/, 6];
+                        case 6: return [2 /*return*/];
+                    }
+                });
+            }); });
             // Get job by ID (publicly accessible)
             app.get("/api/jobs/:id", function (req, res) { return __awaiter(_this, void 0, void 0, function () {
-                var jobId, job, error_2;
+                var jobId, job, error_3;
                 return __generator(this, function (_a) {
                     switch (_a.label) {
                         case 0:
@@ -107,8 +164,8 @@ function registerRoutes(app) {
                             res.json(job);
                             return [3 /*break*/, 3];
                         case 2:
-                            error_2 = _a.sent();
-                            console.error("Error getting job:", error_2);
+                            error_3 = _a.sent();
+                            console.error("Error getting job:", error_3);
                             res.status(500).json({ error: "Failed to retrieve job" });
                             return [3 /*break*/, 3];
                         case 3: return [2 /*return*/];
@@ -117,7 +174,7 @@ function registerRoutes(app) {
             }); });
             // Get jobs by franchisee (requires auth)
             app.get("/api/my-jobs", function (req, res) { return __awaiter(_this, void 0, void 0, function () {
-                var userId, jobs, error_3;
+                var userId, jobs, error_4;
                 return __generator(this, function (_a) {
                     switch (_a.label) {
                         case 0:
@@ -134,8 +191,8 @@ function registerRoutes(app) {
                             res.json(jobs);
                             return [3 /*break*/, 4];
                         case 3:
-                            error_3 = _a.sent();
-                            console.error("Error getting user jobs:", error_3);
+                            error_4 = _a.sent();
+                            console.error("Error getting user jobs:", error_4);
                             res.status(500).json({ error: "Failed to retrieve your job listings" });
                             return [3 /*break*/, 4];
                         case 4: return [2 /*return*/];
@@ -144,7 +201,7 @@ function registerRoutes(app) {
             }); });
             // Create job listing (requires auth)
             app.post("/api/jobs", function (req, res) { return __awaiter(_this, void 0, void 0, function () {
-                var jobData, parseResult, validationError, job, activity, activityError_1, error_4;
+                var jobData, parseResult, validationError, job, activity, activityError_1, error_5;
                 return __generator(this, function (_a) {
                     switch (_a.label) {
                         case 0:
@@ -196,8 +253,8 @@ function registerRoutes(app) {
                             res.status(201).json(job);
                             return [3 /*break*/, 8];
                         case 7:
-                            error_4 = _a.sent();
-                            console.error("Error creating job:", error_4);
+                            error_5 = _a.sent();
+                            console.error("Error creating job:", error_5);
                             res.status(500).json({ error: "Failed to create job listing" });
                             return [3 /*break*/, 8];
                         case 8: return [2 /*return*/];
@@ -206,7 +263,7 @@ function registerRoutes(app) {
             }); });
             // Update job listing (requires auth)
             app.patch("/api/jobs/:id", function (req, res) { return __awaiter(_this, void 0, void 0, function () {
-                var jobId, job, updatedJob, activityError_2, activityError_3, error_5;
+                var jobId, job, updatedJob, activityError_2, activityError_3, error_6;
                 return __generator(this, function (_a) {
                     switch (_a.label) {
                         case 0:
@@ -281,8 +338,8 @@ function registerRoutes(app) {
                             res.json(updatedJob);
                             return [3 /*break*/, 14];
                         case 13:
-                            error_5 = _a.sent();
-                            console.error("Error updating job:", error_5);
+                            error_6 = _a.sent();
+                            console.error("Error updating job:", error_6);
                             res.status(500).json({ error: "Failed to update job listing" });
                             return [3 /*break*/, 14];
                         case 14: return [2 /*return*/];
@@ -291,7 +348,7 @@ function registerRoutes(app) {
             }); });
             // Delete job listing (requires auth)
             app["delete"]("/api/jobs/:id", function (req, res) { return __awaiter(_this, void 0, void 0, function () {
-                var jobId, job, activityError_4, error_6;
+                var jobId, job, activityError_4, error_7;
                 return __generator(this, function (_a) {
                     switch (_a.label) {
                         case 0:
@@ -340,8 +397,8 @@ function registerRoutes(app) {
                             res.status(204).end();
                             return [3 /*break*/, 9];
                         case 8:
-                            error_6 = _a.sent();
-                            console.error("Error deleting job:", error_6);
+                            error_7 = _a.sent();
+                            console.error("Error deleting job:", error_7);
                             res.status(500).json({ error: "Failed to delete job listing" });
                             return [3 /*break*/, 9];
                         case 9: return [2 /*return*/];
@@ -351,7 +408,7 @@ function registerRoutes(app) {
             // Applications Routes
             // Submit a job application (publicly accessible)
             app.post("/api/applications", function (req, res) { return __awaiter(_this, void 0, void 0, function () {
-                var parseResult, validationError, job, application, allApplications, emailResult, jobDetails, activityError_5, emailError_1, error_7;
+                var parseResult, validationError, job, application, allApplications, emailResult, jobDetails, activityError_5, emailError_1, error_8;
                 return __generator(this, function (_a) {
                     switch (_a.label) {
                         case 0:
@@ -430,8 +487,8 @@ function registerRoutes(app) {
                             res.status(201).json(__assign(__assign({}, application), { notificationSent: (emailResult === null || emailResult === void 0 ? void 0 : emailResult.success) || false }));
                             return [3 /*break*/, 17];
                         case 16:
-                            error_7 = _a.sent();
-                            console.error("Error creating application:", error_7);
+                            error_8 = _a.sent();
+                            console.error("Error creating application:", error_8);
                             res.status(500).json({ error: "Failed to submit application" });
                             return [3 /*break*/, 17];
                         case 17: return [2 /*return*/];
@@ -440,7 +497,7 @@ function registerRoutes(app) {
             }); });
             // Get applications for a franchisee (requires auth)
             app.get("/api/my-applications", function (req, res) { return __awaiter(_this, void 0, void 0, function () {
-                var userId, userJobs, userJobIds, allApplications, matchedApplications, _i, allApplications_1, app_1, appJobId, applicationsWithJobDetails, error_8;
+                var userId, userJobs, userJobIds, allApplications, matchedApplications, _i, allApplications_1, app_1, appJobId, applicationsWithJobDetails, error_9;
                 var _this = this;
                 return __generator(this, function (_a) {
                     switch (_a.label) {
@@ -505,8 +562,8 @@ function registerRoutes(app) {
                             res.json(applicationsWithJobDetails);
                             return [3 /*break*/, 6];
                         case 5:
-                            error_8 = _a.sent();
-                            console.error("Error getting applications:", error_8);
+                            error_9 = _a.sent();
+                            console.error("Error getting applications:", error_9);
                             res.status(500).json({ error: "Failed to retrieve applications" });
                             return [3 /*break*/, 6];
                         case 6: return [2 /*return*/];
@@ -515,7 +572,7 @@ function registerRoutes(app) {
             }); });
             // Get applications for a specific job (requires auth)
             app.get("/api/applications/job/:jobId", function (req, res) { return __awaiter(_this, void 0, void 0, function () {
-                var jobId_1, job, allApplications, jobApplications, error_9;
+                var jobId_1, job, allApplications, jobApplications, error_10;
                 return __generator(this, function (_a) {
                     switch (_a.label) {
                         case 0:
@@ -548,8 +605,8 @@ function registerRoutes(app) {
                             res.json(jobApplications);
                             return [3 /*break*/, 5];
                         case 4:
-                            error_9 = _a.sent();
-                            console.error("Error getting applications for job " + req.params.jobId + ":", error_9);
+                            error_10 = _a.sent();
+                            console.error("Error getting applications for job " + req.params.jobId + ":", error_10);
                             res.status(500).json({ error: "Failed to retrieve applications" });
                             return [3 /*break*/, 5];
                         case 5: return [2 /*return*/];
@@ -558,7 +615,7 @@ function registerRoutes(app) {
             }); });
             // Get application by ID (requires auth)
             app.get("/api/applications/:id", function (req, res) { return __awaiter(_this, void 0, void 0, function () {
-                var applicationId, application, job, error_10;
+                var applicationId, application, job, error_11;
                 return __generator(this, function (_a) {
                     switch (_a.label) {
                         case 0:
@@ -584,8 +641,8 @@ function registerRoutes(app) {
                             res.json(application);
                             return [3 /*break*/, 5];
                         case 4:
-                            error_10 = _a.sent();
-                            console.error("Error getting application:", error_10);
+                            error_11 = _a.sent();
+                            console.error("Error getting application:", error_11);
                             res.status(500).json({ error: "Failed to retrieve application" });
                             return [3 /*break*/, 5];
                         case 5: return [2 /*return*/];
@@ -594,7 +651,7 @@ function registerRoutes(app) {
             }); });
             // Update application status (requires auth)
             app.patch("/api/applications/:id", function (req, res) { return __awaiter(_this, void 0, void 0, function () {
-                var applicationId, application, job, status, allowedStatuses, previousStatus, updatedApplication, activityError_6, emailResult, emailError_2, error_11;
+                var applicationId, application, job, status, allowedStatuses, previousStatus, updatedApplication, activityError_6, emailResult, emailError_2, error_12;
                 return __generator(this, function (_a) {
                     switch (_a.label) {
                         case 0:
@@ -677,8 +734,8 @@ function registerRoutes(app) {
                             res.json(__assign(__assign({}, updatedApplication), { notificationSent: (emailResult === null || emailResult === void 0 ? void 0 : emailResult.success) || false }));
                             return [3 /*break*/, 15];
                         case 14:
-                            error_11 = _a.sent();
-                            console.error("Error updating application:", error_11);
+                            error_12 = _a.sent();
+                            console.error("Error updating application:", error_12);
                             res.status(500).json({ error: "Failed to update application" });
                             return [3 /*break*/, 15];
                         case 15: return [2 /*return*/];
@@ -688,7 +745,7 @@ function registerRoutes(app) {
             // Activities routes
             // Get activities for a franchisee (requires auth)
             app.get("/api/my-activities", function (req, res) { return __awaiter(_this, void 0, void 0, function () {
-                var userId, activities, error_12;
+                var userId, activities, error_13;
                 return __generator(this, function (_a) {
                     switch (_a.label) {
                         case 0:
@@ -711,8 +768,8 @@ function registerRoutes(app) {
                             res.json(activities);
                             return [3 /*break*/, 4];
                         case 3:
-                            error_12 = _a.sent();
-                            console.error("Error getting activities:", error_12);
+                            error_13 = _a.sent();
+                            console.error("Error getting activities:", error_13);
                             res.status(500).json({ error: "Failed to retrieve activities" });
                             return [3 /*break*/, 4];
                         case 4: return [2 /*return*/];
@@ -721,7 +778,7 @@ function registerRoutes(app) {
             }); });
             // Create an activity log (requires auth)
             app.post("/api/activities", function (req, res) { return __awaiter(_this, void 0, void 0, function () {
-                var activityData, parseResult, validationError, activity, error_13;
+                var activityData, parseResult, validationError, activity, error_14;
                 return __generator(this, function (_a) {
                     switch (_a.label) {
                         case 0:
@@ -743,8 +800,8 @@ function registerRoutes(app) {
                             res.status(201).json(activity);
                             return [3 /*break*/, 4];
                         case 3:
-                            error_13 = _a.sent();
-                            console.error("Error creating activity:", error_13);
+                            error_14 = _a.sent();
+                            console.error("Error creating activity:", error_14);
                             res.status(500).json({ error: "Failed to create activity log" });
                             return [3 /*break*/, 4];
                         case 4: return [2 /*return*/];

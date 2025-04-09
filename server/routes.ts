@@ -20,17 +20,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Job Listings Routes
   // Get all job listings (publicly accessible)
-  app.get("/api/jobs", async (req, res) => {
-    try {
-      const jobs = await storage.getJobs();
-      // Filter by active status for public view
-      const activeJobs = jobs.filter(job => job.status === "active");
-      res.json(activeJobs);
-    } catch (error) {
-      console.error("Error getting jobs:", error);
-      res.status(500).json({ error: "Failed to retrieve job listings" });
+ // Get all job listings (publicly accessible)
+app.get("/api/jobs", async (req, res) => {
+  try {
+    const jobs = await storage.getJobs();
+    // Filter by active status for public view, excluding archived jobs
+    const activeJobs = jobs.filter(job => job.status === "active");
+    res.json(activeJobs);
+  } catch (error) {
+    console.error("Error getting jobs:", error);
+    res.status(500).json({ error: "Failed to retrieve job listings" });
+  }
+});
+
+// If you want a specific archive endpoint, add this:
+app.post("/api/jobs/:id/archive", async (req, res) => {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const jobId = parseInt(req.params.id);
+    const job = await storage.getJobById(jobId);
+    
+    if (!job) {
+      return res.status(404).json({ error: "Job not found" });
     }
-  });
+    
+    // Check if the authenticated user owns this job
+    if (job.userId !== req.user.id) {
+      return res.status(403).json({ error: "Forbidden: You do not own this job listing" });
+    }
+    
+    // Check if job is already archived
+    if (job.status === "archived") {
+      return res.status(400).json({ error: "Job is already archived" });
+    }
+    
+    // Archive the job
+    const updatedJob = await storage.updateJob(jobId, { status: "archived" });
+    
+    // Log the archive activity
+    await storage.createActivity({
+      userId: req.user.id,
+      action: "updated_job_status",
+      entityType: "job",
+      entityId: jobId,
+      details: { 
+        jobTitle: updatedJob.title, 
+        previousStatus: job.status,
+        newStatus: "archived"
+      }
+    });
+    
+    res.json(updatedJob);
+  } catch (error) {
+    console.error("Error archiving job:", error);
+    res.status(500).json({ error: "Failed to archive job listing" });
+  }
+});
 
   // Get job by ID (publicly accessible)
   app.get("/api/jobs/:id", async (req, res) => {
