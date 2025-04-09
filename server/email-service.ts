@@ -3,7 +3,7 @@ import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY || 're_Hywa1czp_PV64Ygb6F5o43CmUjSoMnmxc');
 
-const SENDER_EMAIL = 'onboarding@resend.dev'; 
+const SENDER_EMAIL = 'chiiibiiiniliiibinn@resend.dev'; 
 
 export async function sendApplicationConfirmation(application, job, referenceId) {
   try {
