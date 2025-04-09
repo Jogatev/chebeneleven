@@ -351,11 +351,11 @@ function registerRoutes(app) {
             // Applications Routes
             // Submit a job application (publicly accessible)
             app.post("/api/applications", function (req, res) { return __awaiter(_this, void 0, void 0, function () {
-                var parseResult, validationError, job, application, allApplications, jobDetails, emailResult, activityError_5, emailError_1, error_7;
+                var parseResult, validationError, job, application, allApplications, emailResult, jobDetails, activityError_5, emailError_1, error_7;
                 return __generator(this, function (_a) {
                     switch (_a.label) {
                         case 0:
-                            _a.trys.push([0, 13, , 14]);
+                            _a.trys.push([0, 16, , 17]);
                             parseResult = schema_1.insertApplicationSchema.safeParse(req.body);
                             if (!parseResult.success) {
                                 validationError = zod_validation_error_1.fromZodError(parseResult.error);
@@ -379,53 +379,62 @@ function registerRoutes(app) {
                         case 3:
                             allApplications = _a.sent();
                             console.log("Total applications in storage: " + allApplications.length);
+                            emailResult = null;
                             _a.label = 4;
                         case 4:
-                            _a.trys.push([4, 11, , 12]);
+                            _a.trys.push([4, 14, , 15]);
+                            if (!application.email) return [3 /*break*/, 8];
                             return [4 /*yield*/, storage_1.storage.getJobById(application.jobId)];
                         case 5:
                             jobDetails = _a.sent();
-                            if (!jobDetails) return [3 /*break*/, 10];
+                            if (!jobDetails) return [3 /*break*/, 7];
                             return [4 /*yield*/, email_service_1.sendApplicationConfirmation(application, jobDetails, application.referenceId)];
                         case 6:
                             emailResult = _a.sent();
                             console.log("Application confirmation email sent:", emailResult);
-                            // Log activity for the job owner (franchisee)
-                            console.log("Logging application received activity for user " + jobDetails.userId);
                             _a.label = 7;
-                        case 7:
-                            _a.trys.push([7, 9, , 10]);
+                        case 7: return [3 /*break*/, 9];
+                        case 8:
+                            console.log("No email provided for application, skipping confirmation email");
+                            _a.label = 9;
+                        case 9:
+                            // Log activity for the job owner (franchisee)
+                            console.log("Logging application received activity for user " + job.userId);
+                            _a.label = 10;
+                        case 10:
+                            _a.trys.push([10, 12, , 13]);
                             return [4 /*yield*/, storage_1.storage.createActivity({
-                                    userId: jobDetails.userId,
+                                    userId: job.userId,
                                     action: "received_application",
                                     entityType: "application",
                                     entityId: application.id,
                                     details: {
                                         applicantName: application.firstName + " " + application.lastName,
-                                        jobTitle: jobDetails.title
+                                        jobTitle: job.title
                                     }
                                 })];
-                        case 8:
+                        case 11:
                             _a.sent();
-                            return [3 /*break*/, 10];
-                        case 9:
+                            return [3 /*break*/, 13];
+                        case 12:
                             activityError_5 = _a.sent();
                             console.error("Error logging application received activity:", activityError_5);
-                            return [3 /*break*/, 10];
-                        case 10: return [3 /*break*/, 12];
-                        case 11:
+                            return [3 /*break*/, 13];
+                        case 13: return [3 /*break*/, 15];
+                        case 14:
                             emailError_1 = _a.sent();
                             console.error("Error sending confirmation email:", emailError_1);
-                            return [3 /*break*/, 12];
-                        case 12:
-                            res.status(201).json(application);
-                            return [3 /*break*/, 14];
-                        case 13:
+                            return [3 /*break*/, 15];
+                        case 15:
+                            // Include email status in response
+                            res.status(201).json(__assign(__assign({}, application), { notificationSent: (emailResult === null || emailResult === void 0 ? void 0 : emailResult.success) || false }));
+                            return [3 /*break*/, 17];
+                        case 16:
                             error_7 = _a.sent();
                             console.error("Error creating application:", error_7);
                             res.status(500).json({ error: "Failed to submit application" });
-                            return [3 /*break*/, 14];
-                        case 14: return [2 /*return*/];
+                            return [3 /*break*/, 17];
+                        case 17: return [2 /*return*/];
                     }
                 });
             }); });
@@ -594,7 +603,7 @@ function registerRoutes(app) {
                             }
                             _a.label = 1;
                         case 1:
-                            _a.trys.push([1, 13, , 14]);
+                            _a.trys.push([1, 14, , 15]);
                             applicationId = parseInt(req.params.id);
                             return [4 /*yield*/, storage_1.storage.getApplicationById(applicationId)];
                         case 2:
@@ -649,27 +658,30 @@ function registerRoutes(app) {
                             console.error("Error logging status update activity:", activityError_6);
                             return [3 /*break*/, 8];
                         case 8:
-                            _a.trys.push([8, 11, , 12]);
-                            if (!application.email) return [3 /*break*/, 10];
-                            return [4 /*yield*/, email_service_1.sendStatusUpdateEmail(application, job, status, application.referenceId)];
+                            emailResult = null;
+                            _a.label = 9;
                         case 9:
+                            _a.trys.push([9, 12, , 13]);
+                            if (!application.email) return [3 /*break*/, 11];
+                            return [4 /*yield*/, email_service_1.sendStatusUpdateEmail(application, job, status, application.referenceId)];
+                        case 10:
                             emailResult = _a.sent();
                             console.log("Status update email sent:", emailResult);
-                            _a.label = 10;
-                        case 10: return [3 /*break*/, 12];
-                        case 11:
+                            _a.label = 11;
+                        case 11: return [3 /*break*/, 13];
+                        case 12:
                             emailError_2 = _a.sent();
                             console.error("Error sending status update email:", emailError_2);
-                            return [3 /*break*/, 12];
-                        case 12:
-                            res.json(updatedApplication);
-                            return [3 /*break*/, 14];
+                            return [3 /*break*/, 13];
                         case 13:
+                            res.json(__assign(__assign({}, updatedApplication), { notificationSent: (emailResult === null || emailResult === void 0 ? void 0 : emailResult.success) || false }));
+                            return [3 /*break*/, 15];
+                        case 14:
                             error_11 = _a.sent();
                             console.error("Error updating application:", error_11);
                             res.status(500).json({ error: "Failed to update application" });
-                            return [3 /*break*/, 14];
-                        case 14: return [2 /*return*/];
+                            return [3 /*break*/, 15];
+                        case 15: return [2 /*return*/];
                     }
                 });
             }); });

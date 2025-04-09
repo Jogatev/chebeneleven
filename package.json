@@ -81,6 +81,7 @@
     "react-resizable-panels": "^2.1.4",
     "react-to-print": "^3.0.5",
     "recharts": "^2.13.0",
+    "resend": "^4.2.0",
     "tailwind-merge": "^2.5.4",
     "tailwindcss-animate": "^1.0.7",
     "use-places-autocomplete": "^4.0.1",

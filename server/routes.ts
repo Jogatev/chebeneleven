@@ -5,6 +5,7 @@ import { setupAuth } from "./auth";
 import { insertJobListingSchema, insertApplicationSchema, insertActivitySchema } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
 import { sendApplicationConfirmation, sendStatusUpdateEmail } from "./email-service";
+
 export async function registerRoutes(app: Express): Promise<Server> {
   console.log("Starting route registration...");
   
@@ -255,39 +256,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`Total applications in storage: ${allApplications.length}`);
       
       // Send confirmation email with the reference ID
+      let emailResult = null;
       try {
-        const jobDetails = await storage.getJobById(application.jobId);
-        if (jobDetails) {
-          const emailResult = await sendApplicationConfirmation(
-            application,
-            jobDetails,
-            application.referenceId
-          );
-          console.log("Application confirmation email sent:", emailResult);
-          
-          // Log activity for the job owner (franchisee)
-          console.log(`Logging application received activity for user ${jobDetails.userId}`);
-          try {
-            await storage.createActivity({
-              userId: jobDetails.userId,
-              action: "received_application",
-              entityType: "application",
-              entityId: application.id,
-              details: { 
-                applicantName: `${application.firstName} ${application.lastName}`,
-                jobTitle: jobDetails.title
-              }
-            });
-          } catch (activityError) {
-            console.error("Error logging application received activity:", activityError);
+        if (application.email) {
+          // Make sure we have job details
+          const jobDetails = await storage.getJobById(application.jobId);
+          if (jobDetails) {
+            emailResult = await sendApplicationConfirmation(
+              application,
+              jobDetails,
+              application.referenceId
+            );
+            console.log("Application confirmation email sent:", emailResult);
           }
+        } else {
+          console.log("No email provided for application, skipping confirmation email");
         }
+        
+        // Log activity for the job owner (franchisee)
+        console.log(`Logging application received activity for user ${job.userId}`);
+        try {
+          await storage.createActivity({
+            userId: job.userId,
+            action: "received_application",
+            entityType: "application",
+            entityId: application.id,
+            details: { 
+              applicantName: `${application.firstName} ${application.lastName}`,
+              jobTitle: job.title
+            }
+          });
+        } catch (activityError) {
+          console.error("Error logging application received activity:", activityError);
+        }
+        
       } catch (emailError) {
         console.error("Error sending confirmation email:", emailError);
         // Don't fail the request if email fails
       }
       
-      res.status(201).json(application);
+      // Include email status in response
+      res.status(201).json({
+        ...application,
+        notificationSent: emailResult?.success || false
+      });
+      
     } catch (error) {
       console.error("Error creating application:", error);
       res.status(500).json({ error: "Failed to submit application" });
@@ -492,9 +505,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Send status update email to applicant
+      let emailResult = null;
       try {
         if (application.email) {
-          const emailResult = await sendStatusUpdateEmail(
+          emailResult = await sendStatusUpdateEmail(
             application,
             job,
             status,
@@ -507,7 +521,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Don't fail the request if email fails
       }
       
-      res.json(updatedApplication);
+      res.json({
+        ...updatedApplication,
+        notificationSent: emailResult?.success || false
+      });
     } catch (error) {
       console.error("Error updating application:", error);
       res.status(500).json({ error: "Failed to update application" });
