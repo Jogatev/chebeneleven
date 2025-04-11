@@ -203,7 +203,6 @@ function JobDetails() {
                     applications && applications.length > 0 && (React.createElement("span", { className: "ml-1 bg-primary text-primary-foreground rounded-full px-2 py-0.5 text-xs" }, applications.length)))),
             React.createElement(tabs_1.TabsContent, { value: "details" },
                 React.createElement(card_1.Card, null,
-                    "// In the CardHeader section where the Edit button is",
                     React.createElement(card_1.CardHeader, { className: "flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4 pb-4 sm:pb-6" },
                         React.createElement("div", null,
                             React.createElement(card_1.CardTitle, { className: "text-xl sm:text-2xl" }, job.title),

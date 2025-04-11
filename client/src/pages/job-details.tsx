@@ -178,7 +178,6 @@ export default function JobDetails() {
 
         <TabsContent value="details">
           <Card>
-          // In the CardHeader section where the Edit button is
 <CardHeader className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4 pb-4 sm:pb-6">
   <div>
     <CardTitle className="text-xl sm:text-2xl">{job.title}</CardTitle>
