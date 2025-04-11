@@ -49,7 +49,7 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 exports.__esModule = true;
 exports.registerRoutes = void 0;
 var http_1 = require("http");
-var storage_1 = require("./storage");
+var unified_storage_1 = require("./unified-storage");
 var auth_1 = require("./auth");
 var schema_1 = require("@shared/schema");
 var zod_validation_error_1 = require("zod-validation-error");
@@ -60,23 +60,18 @@ function registerRoutes(app) {
         var _this = this;
         return __generator(this, function (_a) {
             console.log("Starting route registration...");
-            // Simple test route
             app.get("/api/test", function (req, res) {
                 console.log("Test route accessed");
                 res.json({ message: "Test route working!" });
             });
-            // Set up authentication routes (/api/register, /api/login, /api/logout, /api/user)
             auth_1.setupAuth(app);
-            // Job Listings Routes
-            // Get all job listings (publicly accessible)
-            // Get all job listings (publicly accessible)
             app.get("/api/jobs", function (req, res) { return __awaiter(_this, void 0, void 0, function () {
                 var jobs, activeJobs, error_1;
                 return __generator(this, function (_a) {
                     switch (_a.label) {
                         case 0:
                             _a.trys.push([0, 2, , 3]);
-                            return [4 /*yield*/, storage_1.storage.getJobs()];
+                            return [4 /*yield*/, unified_storage_1.storage.getJobs()];
                         case 1:
                             jobs = _a.sent();
                             activeJobs = jobs.filter(function (job) { return job.status === "active"; });
@@ -91,7 +86,6 @@ function registerRoutes(app) {
                     }
                 });
             }); });
-            // If you want a specific archive endpoint, add this:
             app.post("/api/jobs/:id/archive", function (req, res) { return __awaiter(_this, void 0, void 0, function () {
                 var jobId, job, updatedJob, error_2;
                 return __generator(this, function (_a) {
@@ -104,7 +98,7 @@ function registerRoutes(app) {
                         case 1:
                             _a.trys.push([1, 5, , 6]);
                             jobId = parseInt(req.params.id);
-                            return [4 /*yield*/, storage_1.storage.getJobById(jobId)];
+                            return [4 /*yield*/, unified_storage_1.storage.getJobById(jobId)];
                         case 2:
                             job = _a.sent();
                             if (!job) {
@@ -118,11 +112,11 @@ function registerRoutes(app) {
                             if (job.status === "archived") {
                                 return [2 /*return*/, res.status(400).json({ error: "Job is already archived" })];
                             }
-                            return [4 /*yield*/, storage_1.storage.updateJob(jobId, { status: "archived" })];
+                            return [4 /*yield*/, unified_storage_1.storage.updateJob(jobId, { status: "archived" })];
                         case 3:
                             updatedJob = _a.sent();
                             // Log the archive activity
-                            return [4 /*yield*/, storage_1.storage.createActivity({
+                            return [4 /*yield*/, unified_storage_1.storage.createActivity({
                                     userId: req.user.id,
                                     action: "updated_job_status",
                                     entityType: "job",
@@ -155,7 +149,7 @@ function registerRoutes(app) {
                         case 0:
                             _a.trys.push([0, 2, , 3]);
                             jobId = parseInt(req.params.id);
-                            return [4 /*yield*/, storage_1.storage.getJobById(jobId)];
+                            return [4 /*yield*/, unified_storage_1.storage.getJobById(jobId)];
                         case 1:
                             job = _a.sent();
                             if (!job) {
@@ -185,7 +179,7 @@ function registerRoutes(app) {
                         case 1:
                             _a.trys.push([1, 3, , 4]);
                             userId = req.user.id;
-                            return [4 /*yield*/, storage_1.storage.getJobsByUserId(userId)];
+                            return [4 /*yield*/, unified_storage_1.storage.getJobsByUserId(userId)];
                         case 2:
                             jobs = _a.sent();
                             res.json(jobs);
@@ -226,7 +220,7 @@ function registerRoutes(app) {
                                 validationError = zod_validation_error_1.fromZodError(parseResult.error);
                                 return [2 /*return*/, res.status(400).json({ error: validationError.message })];
                             }
-                            return [4 /*yield*/, storage_1.storage.createJob(parseResult.data)];
+                            return [4 /*yield*/, unified_storage_1.storage.createJob(parseResult.data)];
                         case 2:
                             job = _a.sent();
                             // Log the activity with debugging
@@ -234,7 +228,7 @@ function registerRoutes(app) {
                             _a.label = 3;
                         case 3:
                             _a.trys.push([3, 5, , 6]);
-                            return [4 /*yield*/, storage_1.storage.createActivity({
+                            return [4 /*yield*/, unified_storage_1.storage.createActivity({
                                     userId: req.user.id,
                                     action: "created_job",
                                     entityType: "job",
@@ -274,7 +268,7 @@ function registerRoutes(app) {
                         case 1:
                             _a.trys.push([1, 13, , 14]);
                             jobId = parseInt(req.params.id);
-                            return [4 /*yield*/, storage_1.storage.getJobById(jobId)];
+                            return [4 /*yield*/, unified_storage_1.storage.getJobById(jobId)];
                         case 2:
                             job = _a.sent();
                             if (!job) {
@@ -284,7 +278,7 @@ function registerRoutes(app) {
                             if (job.userId !== req.user.id) {
                                 return [2 /*return*/, res.status(403).json({ error: "Forbidden: You do not own this job listing" })];
                             }
-                            return [4 /*yield*/, storage_1.storage.updateJob(jobId, req.body)];
+                            return [4 /*yield*/, unified_storage_1.storage.updateJob(jobId, req.body)];
                         case 3:
                             updatedJob = _a.sent();
                             if (!req.body.status) return [3 /*break*/, 8];
@@ -292,7 +286,7 @@ function registerRoutes(app) {
                             _a.label = 4;
                         case 4:
                             _a.trys.push([4, 6, , 7]);
-                            return [4 /*yield*/, storage_1.storage.createActivity({
+                            return [4 /*yield*/, unified_storage_1.storage.createActivity({
                                     userId: req.user.id,
                                     action: "updated_job_status",
                                     entityType: "job",
@@ -317,7 +311,7 @@ function registerRoutes(app) {
                             _a.label = 9;
                         case 9:
                             _a.trys.push([9, 11, , 12]);
-                            return [4 /*yield*/, storage_1.storage.createActivity({
+                            return [4 /*yield*/, unified_storage_1.storage.createActivity({
                                     userId: req.user.id,
                                     action: "updated_job",
                                     entityType: "job",
@@ -359,7 +353,7 @@ function registerRoutes(app) {
                         case 1:
                             _a.trys.push([1, 8, , 9]);
                             jobId = parseInt(req.params.id);
-                            return [4 /*yield*/, storage_1.storage.getJobById(jobId)];
+                            return [4 /*yield*/, unified_storage_1.storage.getJobById(jobId)];
                         case 2:
                             job = _a.sent();
                             if (!job) {
@@ -374,7 +368,7 @@ function registerRoutes(app) {
                             _a.label = 3;
                         case 3:
                             _a.trys.push([3, 5, , 6]);
-                            return [4 /*yield*/, storage_1.storage.createActivity({
+                            return [4 /*yield*/, unified_storage_1.storage.createActivity({
                                     userId: req.user.id,
                                     action: "deleted_job",
                                     entityType: "job",
@@ -391,7 +385,7 @@ function registerRoutes(app) {
                             activityError_4 = _a.sent();
                             console.error("Error logging job deletion activity:", activityError_4);
                             return [3 /*break*/, 6];
-                        case 6: return [4 /*yield*/, storage_1.storage.deleteJob(jobId)];
+                        case 6: return [4 /*yield*/, unified_storage_1.storage.deleteJob(jobId)];
                         case 7:
                             _a.sent();
                             res.status(204).end();
@@ -418,7 +412,7 @@ function registerRoutes(app) {
                                 validationError = zod_validation_error_1.fromZodError(parseResult.error);
                                 return [2 /*return*/, res.status(400).json({ error: validationError.message })];
                             }
-                            return [4 /*yield*/, storage_1.storage.getJobById(parseResult.data.jobId)];
+                            return [4 /*yield*/, unified_storage_1.storage.getJobById(parseResult.data.jobId)];
                         case 1:
                             job = _a.sent();
                             if (!job) {
@@ -428,11 +422,11 @@ function registerRoutes(app) {
                             if (job.status !== "active") {
                                 return [2 /*return*/, res.status(400).json({ error: "This job is no longer accepting applications" })];
                             }
-                            return [4 /*yield*/, storage_1.storage.createApplication(parseResult.data)];
+                            return [4 /*yield*/, unified_storage_1.storage.createApplication(parseResult.data)];
                         case 2:
                             application = _a.sent();
                             console.log("Application created successfully:", application);
-                            return [4 /*yield*/, storage_1.storage.getApplications()];
+                            return [4 /*yield*/, unified_storage_1.storage.getApplications()];
                         case 3:
                             allApplications = _a.sent();
                             console.log("Total applications in storage: " + allApplications.length);
@@ -441,7 +435,7 @@ function registerRoutes(app) {
                         case 4:
                             _a.trys.push([4, 14, , 15]);
                             if (!application.email) return [3 /*break*/, 8];
-                            return [4 /*yield*/, storage_1.storage.getJobById(application.jobId)];
+                            return [4 /*yield*/, unified_storage_1.storage.getJobById(application.jobId)];
                         case 5:
                             jobDetails = _a.sent();
                             if (!jobDetails) return [3 /*break*/, 7];
@@ -460,7 +454,7 @@ function registerRoutes(app) {
                             _a.label = 10;
                         case 10:
                             _a.trys.push([10, 12, , 13]);
-                            return [4 /*yield*/, storage_1.storage.createActivity({
+                            return [4 /*yield*/, unified_storage_1.storage.createActivity({
                                     userId: job.userId,
                                     action: "received_application",
                                     entityType: "application",
@@ -510,7 +504,7 @@ function registerRoutes(app) {
                             _a.trys.push([1, 5, , 6]);
                             userId = req.user.id;
                             console.log("Getting applications for user " + userId);
-                            return [4 /*yield*/, storage_1.storage.getJobsByUserId(userId)];
+                            return [4 /*yield*/, unified_storage_1.storage.getJobsByUserId(userId)];
                         case 2:
                             userJobs = _a.sent();
                             console.log("User has " + userJobs.length + " job listings:", userJobs.map(function (j) { return j.id; }));
@@ -519,7 +513,7 @@ function registerRoutes(app) {
                                 return [2 /*return*/, res.json([])];
                             }
                             userJobIds = userJobs.map(function (job) { return job.id; });
-                            return [4 /*yield*/, storage_1.storage.getApplications()];
+                            return [4 /*yield*/, unified_storage_1.storage.getApplications()];
                         case 3:
                             allApplications = _a.sent();
                             console.log("Total applications in system: " + allApplications.length);
@@ -550,7 +544,7 @@ function registerRoutes(app) {
                                     var job;
                                     return __generator(this, function (_a) {
                                         switch (_a.label) {
-                                            case 0: return [4 /*yield*/, storage_1.storage.getJobById(app.jobId)];
+                                            case 0: return [4 /*yield*/, unified_storage_1.storage.getJobById(app.jobId)];
                                             case 1:
                                                 job = _a.sent();
                                                 return [2 /*return*/, __assign(__assign({}, app), { jobTitle: job ? job.title : "Unknown Job", jobLocation: job ? job.location : "Unknown Location" })];
@@ -583,7 +577,7 @@ function registerRoutes(app) {
                         case 1:
                             _a.trys.push([1, 4, , 5]);
                             jobId_1 = parseInt(req.params.jobId);
-                            return [4 /*yield*/, storage_1.storage.getJobById(jobId_1)];
+                            return [4 /*yield*/, unified_storage_1.storage.getJobById(jobId_1)];
                         case 2:
                             job = _a.sent();
                             if (!job) {
@@ -593,7 +587,7 @@ function registerRoutes(app) {
                             if (job.userId !== req.user.id) {
                                 return [2 /*return*/, res.status(403).json({ error: "Forbidden: You do not own this job listing" })];
                             }
-                            return [4 /*yield*/, storage_1.storage.getApplications()];
+                            return [4 /*yield*/, unified_storage_1.storage.getApplications()];
                         case 3:
                             allApplications = _a.sent();
                             jobApplications = allApplications.filter(function (app) {
@@ -626,13 +620,13 @@ function registerRoutes(app) {
                         case 1:
                             _a.trys.push([1, 4, , 5]);
                             applicationId = parseInt(req.params.id);
-                            return [4 /*yield*/, storage_1.storage.getApplicationById(applicationId)];
+                            return [4 /*yield*/, unified_storage_1.storage.getApplicationById(applicationId)];
                         case 2:
                             application = _a.sent();
                             if (!application) {
                                 return [2 /*return*/, res.status(404).json({ error: "Application not found" })];
                             }
-                            return [4 /*yield*/, storage_1.storage.getJobById(application.jobId)];
+                            return [4 /*yield*/, unified_storage_1.storage.getJobById(application.jobId)];
                         case 3:
                             job = _a.sent();
                             if (!job || job.userId !== req.user.id) {
@@ -662,13 +656,13 @@ function registerRoutes(app) {
                         case 1:
                             _a.trys.push([1, 14, , 15]);
                             applicationId = parseInt(req.params.id);
-                            return [4 /*yield*/, storage_1.storage.getApplicationById(applicationId)];
+                            return [4 /*yield*/, unified_storage_1.storage.getApplicationById(applicationId)];
                         case 2:
                             application = _a.sent();
                             if (!application) {
                                 return [2 /*return*/, res.status(404).json({ error: "Application not found" })];
                             }
-                            return [4 /*yield*/, storage_1.storage.getJobById(application.jobId)];
+                            return [4 /*yield*/, unified_storage_1.storage.getJobById(application.jobId)];
                         case 3:
                             job = _a.sent();
                             if (!job || job.userId !== req.user.id) {
@@ -687,7 +681,7 @@ function registerRoutes(app) {
                                     })];
                             }
                             previousStatus = application.status || "submitted";
-                            return [4 /*yield*/, storage_1.storage.updateApplication(applicationId, { status: status })];
+                            return [4 /*yield*/, unified_storage_1.storage.updateApplication(applicationId, { status: status })];
                         case 4:
                             updatedApplication = _a.sent();
                             // Log the activity
@@ -695,7 +689,7 @@ function registerRoutes(app) {
                             _a.label = 5;
                         case 5:
                             _a.trys.push([5, 7, , 8]);
-                            return [4 /*yield*/, storage_1.storage.createActivity({
+                            return [4 /*yield*/, unified_storage_1.storage.createActivity({
                                     userId: req.user.id,
                                     action: "updated_application_status",
                                     entityType: "application",
@@ -756,7 +750,7 @@ function registerRoutes(app) {
                         case 1:
                             _a.trys.push([1, 3, , 4]);
                             userId = req.user.id;
-                            return [4 /*yield*/, storage_1.storage.getActivitiesByUserId(userId)];
+                            return [4 /*yield*/, unified_storage_1.storage.getActivitiesByUserId(userId)];
                         case 2:
                             activities = _a.sent();
                             // Sort activities by createdAt descending (newest first)
@@ -794,7 +788,7 @@ function registerRoutes(app) {
                                 validationError = zod_validation_error_1.fromZodError(parseResult.error);
                                 return [2 /*return*/, res.status(400).json({ error: validationError.message })];
                             }
-                            return [4 /*yield*/, storage_1.storage.createActivity(parseResult.data)];
+                            return [4 /*yield*/, unified_storage_1.storage.createActivity(parseResult.data)];
                         case 2:
                             activity = _a.sent();
                             res.status(201).json(activity);

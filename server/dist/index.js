@@ -1,4 +1,8 @@
 "use strict";
+var __makeTemplateObject = (this && this.__makeTemplateObject) || function (cooked, raw) {
+    if (Object.defineProperty) { Object.defineProperty(cooked, "raw", { value: raw }); } else { cooked.raw = raw; }
+    return cooked;
+};
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -43,13 +47,95 @@ var __spreadArrays = (this && this.__spreadArrays) || function () {
     return r;
 };
 exports.__esModule = true;
+exports.DB_CONNECTION_STRING = exports.DB_TYPE = void 0;
 var express_1 = require("express");
 var routes_1 = require("./routes");
 var vite_1 = require("./vite");
 var file_upload_1 = require("./file-upload");
+var express_session_1 = require("express-session");
+var memorystore_1 = require("memorystore");
+var connect_pg_simple_1 = require("connect-pg-simple");
+var postgres_js_1 = require("drizzle-orm/postgres-js");
+var postgres_1 = require("postgres");
+var unified_storage_1 = require("./unified-storage");
+var drizzle_orm_1 = require("drizzle-orm");
+var schema_1 = require("@shared/schema");
+// Export DB_TYPE so it can be imported in other files
+exports.DB_TYPE = process.env.DB_TYPE || 'postgres';
+exports.DB_CONNECTION_STRING = process.env.DB_CONNECTION_STRING || 'postgresql://neondb_owner:npg_eFrPutD1n9dE@ep-aged-darkness-a1bh7bgl-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require';
+var SESSION_SECRET = process.env.SESSION_SECRET || 'seven-eleven-careers-secret';
 var app = express_1["default"]();
 app.use(express_1["default"].json());
 app.use(express_1["default"].urlencoded({ extended: false }));
+// Initialize database connection if using PostgreSQL
+var db = null;
+if (exports.DB_TYPE === 'postgres') {
+    try {
+        // Create connection pool
+        console.log('Attempting to connect to PostgreSQL...');
+        var queryClient = postgres_1["default"](exports.DB_CONNECTION_STRING, {
+            ssl: 'require',
+            max: 10,
+            idle_timeout: 20,
+            connect_timeout: 30
+        });
+        // Test the connection
+        queryClient(templateObject_1 || (templateObject_1 = __makeTemplateObject(["SELECT 1"], ["SELECT 1"]))).then(function () {
+            console.log('PostgreSQL connection test successful');
+            // Test database tables after successful connection
+            if (db) {
+                console.log('Testing database tables...');
+                db.select({ count: drizzle_orm_1.sql(templateObject_2 || (templateObject_2 = __makeTemplateObject(["count(*)"], ["count(*)"]))) }).from(schema_1.users)
+                    .then(function (result) { return console.log('Users table count:', result); })["catch"](function (error) { return console.error('Users table test failed:', error); });
+                db.select({ count: drizzle_orm_1.sql(templateObject_3 || (templateObject_3 = __makeTemplateObject(["count(*)"], ["count(*)"]))) }).from(schema_1.jobListings)
+                    .then(function (result) { return console.log('Jobs table count:', result); })["catch"](function (error) { return console.error('Jobs table test failed:', error); });
+            }
+        })["catch"](function (error) {
+            console.error('PostgreSQL connection test failed:', error);
+        });
+        // Create a drizzle instance
+        db = postgres_js_1.drizzle(queryClient);
+        vite_1.log('PostgreSQL database connection initialized');
+    }
+    catch (error) {
+        console.error('Failed to initialize PostgreSQL connection:', error);
+        vite_1.log('Falling back to in-memory storage');
+    }
+}
+// Setup session with appropriate store
+var sessionConfig = {
+    secret: SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000
+    }
+};
+if (exports.DB_TYPE === 'postgres') {
+    // Use PostgreSQL for session storage
+    var PgStore = connect_pg_simple_1["default"](express_session_1["default"]);
+    sessionConfig.store = new PgStore({
+        conString: exports.DB_CONNECTION_STRING,
+        tableName: 'sessions',
+        createTableIfMissing: true,
+        ssl: true
+    });
+    vite_1.log('Using PostgreSQL for session storage');
+    // Set the session store in the unified storage
+    unified_storage_1.setSessionStore(sessionConfig.store);
+}
+else {
+    // Use memory store
+    var MemStore = memorystore_1["default"](express_session_1["default"]);
+    sessionConfig.store = new MemStore({
+        checkPeriod: 86400000
+    });
+    vite_1.log('Using in-memory session storage');
+}
+app.use(express_session_1["default"](sessionConfig));
+// Add request/response logging middleware
 app.use(function (req, res, next) {
     var start = Date.now();
     var path = req.path;
@@ -100,6 +186,13 @@ app.use(function (req, res, next) {
     };
     next();
 });
+// Add the database to the request object
+app.use(function (req, res, next) {
+    if (db) {
+        req.db = db;
+    }
+    next();
+});
 (function () { return __awaiter(void 0, void 0, void 0, function () {
     var server, port;
     return __generator(this, function (_a) {
@@ -110,6 +203,7 @@ app.use(function (req, res, next) {
                 return [4 /*yield*/, routes_1.registerRoutes(app)];
             case 1:
                 server = _a.sent();
+                // Global error handler
                 app.use(function (err, _req, res, _next) {
                     var status = err.status || err.statusCode || 500;
                     var message = err.message || "Internal Server Error";
@@ -131,9 +225,12 @@ app.use(function (req, res, next) {
                     host: "0.0.0.0",
                     reusePort: true
                 }, function () {
-                    vite_1.log("serving on port " + port);
+                    vite_1.log("Server running on port " + port);
+                    vite_1.log("Database type: " + exports.DB_TYPE);
+                    vite_1.log("Environment: " + app.get("env"));
                 });
                 return [2 /*return*/];
         }
     });
 }); })();
+var templateObject_1, templateObject_2, templateObject_3;

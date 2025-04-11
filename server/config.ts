@@ -1,0 +1,2 @@
+export const DB_TYPE = process.env.DB_TYPE || 'memory'; // 'memory' or 'postgres'
+export const DB_CONNECTION_STRING = process.env.DB_CONNECTION_STRING || 'postgresql://postgres:putobonbon@localhost:5432/seven_eleven_careers';

@@ -1,6 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
+import { storage } from "./unified-storage";
 import { setupAuth } from "./auth";
 import { insertJobListingSchema, insertApplicationSchema, insertActivitySchema } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
@@ -9,22 +9,15 @@ import { sendApplicationConfirmation, sendStatusUpdateEmail } from "./email-serv
 export async function registerRoutes(app: Express): Promise<Server> {
   console.log("Starting route registration...");
   
-  // Simple test route
   app.get("/api/test", (req, res) => {
     console.log("Test route accessed");
     res.json({ message: "Test route working!" });
   });
-  
-  // Set up authentication routes (/api/register, /api/login, /api/logout, /api/user)
   setupAuth(app);
 
-  // Job Listings Routes
-  // Get all job listings (publicly accessible)
- // Get all job listings (publicly accessible)
 app.get("/api/jobs", async (req, res) => {
   try {
     const jobs = await storage.getJobs();
-    // Filter by active status for public view, excluding archived jobs
     const activeJobs = jobs.filter(job => job.status === "active");
     res.json(activeJobs);
   } catch (error) {
@@ -33,7 +26,6 @@ app.get("/api/jobs", async (req, res) => {
   }
 });
 
-// If you want a specific archive endpoint, add this:
 app.post("/api/jobs/:id/archive", async (req, res) => {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ error: "Unauthorized" });

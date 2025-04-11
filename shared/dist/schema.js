@@ -11,7 +11,8 @@ exports.users = pg_core_1.pgTable("users", {
     password: pg_core_1.text("password").notNull(),
     franchiseeName: pg_core_1.text("franchise_name").notNull(),
     franchiseeId: pg_core_1.text("franchisee_id").notNull().unique(),
-    location: pg_core_1.text("location").notNull()
+    location: pg_core_1.text("location").notNull(),
+    createdAt: pg_core_1.timestamp("created_at").defaultNow().notNull()
 });
 exports.insertUserSchema = drizzle_zod_1.createInsertSchema(exports.users).pick({
     username: true,
@@ -35,7 +36,6 @@ exports.jobListings = pg_core_1.pgTable("job_listings", {
     status: pg_core_1.text("status").notNull()["default"]("active"),
     createdAt: pg_core_1.timestamp("created_at").defaultNow().notNull(),
     closingDate: pg_core_1.timestamp("closing_date"),
-    // Store tags as JSON
     tags: pg_core_1.json("tags").$type()["default"]([])
 });
 // Create the base schema
@@ -76,6 +76,7 @@ exports.applications = pg_core_1.pgTable("applications", {
     experience: pg_core_1.text("experience"),
     education: pg_core_1.text("education"),
     coverLetter: pg_core_1.text("cover_letter"),
+    availableShifts: pg_core_1.json("available_shifts").$type(),
     workAvailability: pg_core_1.json("work_availability").$type(),
     startDate: pg_core_1.timestamp("start_date"),
     status: pg_core_1.text("status").notNull()["default"]("submitted"),
@@ -83,7 +84,7 @@ exports.applications = pg_core_1.pgTable("applications", {
 });
 // Create the base application schema
 var baseApplicationSchema = drizzle_zod_1.createInsertSchema(exports.applications);
-// Create a modified schema with custom validation for dates
+// Create a modified schema with custom validation
 exports.insertApplicationSchema = baseApplicationSchema.pick({
     jobId: true,
     firstName: true,
@@ -98,6 +99,7 @@ exports.insertApplicationSchema = baseApplicationSchema.pick({
     education: true,
     coverLetter: true,
     availableShifts: true,
+    workAvailability: true,
     status: true
 }).extend({
     // Make referenceId optional for client submissions (will be generated on server)
@@ -108,6 +110,7 @@ exports.insertApplicationSchema = baseApplicationSchema.pick({
         zod_1.z.string().optional().transform(function (val) { return val ? new Date(val) : undefined; })
     ])
 });
+// Activity Logging Schema
 exports.activities = pg_core_1.pgTable("activities", {
     id: pg_core_1.serial("id").primaryKey(),
     userId: pg_core_1.integer("user_id").notNull(),

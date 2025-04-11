@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, json } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, json } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -10,6 +10,7 @@ export const users = pgTable("users", {
   franchiseeName: text("franchise_name").notNull(),
   franchiseeId: text("franchisee_id").notNull().unique(),
   location: text("location").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({
@@ -35,7 +36,6 @@ export const jobListings = pgTable("job_listings", {
   status: text("status").notNull().default("active"), // active, filled, closed, archived
   createdAt: timestamp("created_at").defaultNow().notNull(),
   closingDate: timestamp("closing_date"),
-  // Store tags as JSON
   tags: json("tags").$type<string[]>().default([]),
 });
 
@@ -67,7 +67,7 @@ export const insertJobListingSchema = baseJobSchema.pick({
 export const applications = pgTable("applications", {
   id: serial("id").primaryKey(),
   jobId: integer("job_id").notNull(), // Job listing ID
-  referenceId: text("reference_id").notNull().unique(), // Unique reference ID for tracking the application
+  referenceId: text("reference_id").notNull().unique(), // Unique reference ID for tracking
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   email: text("email").notNull(),
@@ -75,10 +75,11 @@ export const applications = pgTable("applications", {
   address: text("address"),
   city: text("city"),
   zipCode: text("zip_code"),
-  resumeUrl: text("resume_url"), // We'll store file URLs (in real app would be linked to cloud storage)
+  resumeUrl: text("resume_url"), // URL to uploaded resume
   experience: text("experience"),
   education: text("education"),
   coverLetter: text("cover_letter"),
+  availableShifts: json("available_shifts").$type<string[]>(),
   workAvailability: json("work_availability").$type<{
     holidayWork: boolean;
     weekdayWork: boolean;
@@ -95,7 +96,7 @@ export const applications = pgTable("applications", {
 // Create the base application schema
 const baseApplicationSchema = createInsertSchema(applications);
 
-// Create a modified schema with custom validation for dates
+// Create a modified schema with custom validation
 export const insertApplicationSchema = baseApplicationSchema.pick({
   jobId: true,
   firstName: true,
@@ -110,6 +111,7 @@ export const insertApplicationSchema = baseApplicationSchema.pick({
   education: true,
   coverLetter: true,
   availableShifts: true,
+  workAvailability: true,
   status: true,
 }).extend({
   // Make referenceId optional for client submissions (will be generated on server)
@@ -121,15 +123,7 @@ export const insertApplicationSchema = baseApplicationSchema.pick({
   ])
 });
 
-// Types for Insert and Select
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
-
-export type InsertJobListing = z.infer<typeof insertJobListingSchema>;
-export type JobListing = typeof jobListings.$inferSelect;
-
-export type InsertApplication = z.infer<typeof insertApplicationSchema>;
-export type Application = typeof applications.$inferSelect;
+// Activity Logging Schema
 export const activities = pgTable("activities", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull(),
@@ -140,8 +134,18 @@ export const activities = pgTable("activities", {
   timestamp: timestamp("timestamp").defaultNow().notNull(),
 });
 
-export type Activity = typeof activities.$inferSelect;
-export type InsertActivity = typeof activities.$inferInsert;
-
 // Create the schema for inserting activities
 export const insertActivitySchema = createInsertSchema(activities);
+
+// Types for Insert and Select
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type User = typeof users.$inferSelect;
+
+export type InsertJobListing = z.infer<typeof insertJobListingSchema>;
+export type JobListing = typeof jobListings.$inferSelect;
+
+export type InsertApplication = z.infer<typeof insertApplicationSchema>;
+export type Application = typeof applications.$inferSelect;
+
+export type Activity = typeof activities.$inferSelect;
+export type InsertActivity = typeof activities.$inferInsert;
