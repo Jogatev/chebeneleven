@@ -1,9 +1,9 @@
 
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY || 're_Hywa1czp_PV64Ygb6F5o43CmUjSoMnmxc');
+const resend = new Resend(process.env.RESEND_API_KEY || 're_LPWxpWuw_BwiFm1syhyR6dx5x21h1Lh5b');
 
-const SENDER_EMAIL = 'chiiibiiiniliiibinn@resend.dev'; 
+const SENDER_EMAIL = 'careers@cheebeeneeleebeen.online'; 
 
 export async function sendApplicationConfirmation(application, job, referenceId) {
   try {

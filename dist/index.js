@@ -4,215 +4,21 @@ import express3 from "express";
 // server/routes.ts
 import { createServer } from "http";
 
-// server/storage.ts
-import session from "express-session";
-import createMemoryStore from "memorystore";
-import { v4 as uuidv4 } from "uuid";
-var MemoryStore = createMemoryStore(session);
-var MemStorage = class {
-  users;
-  jobs;
-  applications;
-  activities;
-  notes;
-  // Store application notes
-  currentUserId;
-  currentJobId;
-  currentApplicationId;
-  currentActivityId;
-  sessionStore;
-  constructor() {
-    this.users = /* @__PURE__ */ new Map();
-    this.jobs = /* @__PURE__ */ new Map();
-    this.applications = /* @__PURE__ */ new Map();
-    this.activities = /* @__PURE__ */ new Map();
-    this.notes = /* @__PURE__ */ new Map();
-    this.currentUserId = 1;
-    this.currentJobId = 1;
-    this.currentApplicationId = 1;
-    this.currentActivityId = 1;
-    this.sessionStore = new MemoryStore({
-      checkPeriod: 864e5
-      // 24 hours
-    });
-  }
-  // User methods
-  async getUser(id) {
-    return this.users.get(id);
-  }
-  async getUserByUsername(username) {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username
-    );
-  }
-  async createUser(insertUser) {
-    const id = this.currentUserId++;
-    const user = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
-  }
-  async getUsers() {
-    return Array.from(this.users.values());
-  }
-  // Job listing methods
-  async getJobs() {
-    return Array.from(this.jobs.values());
-  }
-  async getJobsByUserId(userId) {
-    return Array.from(this.jobs.values()).filter(
-      (job) => job.userId === userId
-    );
-  }
-  async getJobById(id) {
-    return this.jobs.get(id);
-  }
-  async createJob(insertJob) {
-    const id = this.currentJobId++;
-    const now = /* @__PURE__ */ new Date();
-    const job = {
-      ...insertJob,
-      id,
-      createdAt: now,
-      tags: Array.isArray(insertJob.tags) ? insertJob.tags : []
-    };
-    this.jobs.set(id, job);
-    return job;
-  }
-  async updateJob(id, updates) {
-    const job = this.jobs.get(id);
-    if (!job) return void 0;
-    const updatedJob = { ...job, ...updates };
-    this.jobs.set(id, updatedJob);
-    return updatedJob;
-  }
-  async deleteJob(id) {
-    return this.jobs.delete(id);
-  }
-  // Helper method to generate application reference IDs
-  generateReferenceId() {
-    const year = (/* @__PURE__ */ new Date()).getFullYear();
-    const randomPart = uuidv4().substring(0, 5).toUpperCase();
-    return `SEV-${year}-${randomPart}`;
-  }
-  // Application methods
-  async getApplications() {
-    return Array.from(this.applications.values());
-  }
-  async getApplicationsByJobId(jobId) {
-    const allApplications = Array.from(this.applications.values());
-    console.log(`Looking for applications for job ID ${jobId}, total applications: ${allApplications.length}`);
-    const applications2 = allApplications.filter((app2) => {
-      const appJobId = typeof app2.jobId === "string" ? parseInt(app2.jobId) : app2.jobId;
-      const result = appJobId === jobId;
-      console.log(`Comparing application jobId ${app2.jobId} (${typeof app2.jobId}) with requested jobId ${jobId}: ${result}`);
-      return result;
-    });
-    console.log(`Found ${applications2.length} applications for job ID ${jobId}`);
-    return applications2.map((app2) => {
-      if (!app2.status) {
-        return { ...app2, status: "submitted" };
-      }
-      return app2;
-    });
-  }
-  async getApplicationsForUser(userId) {
-    const userJobs = await this.getJobsByUserId(userId);
-    if (userJobs.length === 0) {
-      console.log(`User ${userId} has no jobs, returning empty applications array`);
-      return [];
-    }
-    const userJobIds = userJobs.map((job) => job.id);
-    console.log(`User ${userId} job IDs:`, userJobIds);
-    const allApplications = Array.from(this.applications.values());
-    console.log(`Total applications in system: ${allApplications.length}`);
-    if (allApplications.length === 0) {
-      console.log("No applications found in storage");
-      return [];
-    }
-    allApplications.forEach((app2) => {
-      const jobIdType = typeof app2.jobId;
-      console.log(`Application ID: ${app2.id}, jobId: ${app2.jobId} (type: ${jobIdType}), status: ${app2.status || "submitted"}`);
-    });
-    const userApplications = allApplications.filter((app2) => {
-      const appJobId = Number(app2.jobId);
-      return userJobIds.includes(appJobId);
-    });
-    console.log(`Applications for user ${userId}'s jobs: ${userApplications.length}`);
-    const normalizedApplications = userApplications.map((app2) => {
-      if (!app2.status) {
-        return { ...app2, status: "submitted" };
-      }
-      return app2;
-    });
-    return normalizedApplications;
-  }
-  async getApplicationById(id) {
-    return this.applications.get(id);
-  }
-  async createApplication(insertApplication) {
-    const id = this.currentApplicationId++;
-    const now = /* @__PURE__ */ new Date();
-    const jobId = typeof insertApplication.jobId === "string" ? parseInt(insertApplication.jobId) : insertApplication.jobId;
-    const referenceId = insertApplication.referenceId || this.generateReferenceId();
-    console.log(`Creating application with jobId: ${jobId}, referenceId: ${referenceId}`);
-    const application = {
-      ...insertApplication,
-      id,
-      jobId,
-      // Make sure jobId is a number
-      referenceId,
-      // Add the reference ID
-      submittedAt: now,
-      availableShifts: Array.isArray(insertApplication.availableShifts) ? insertApplication.availableShifts : []
-    };
-    this.applications.set(id, application);
-    const storedApp = this.applications.get(id);
-    console.log(`Stored application jobId: ${storedApp?.jobId}, referenceId: ${storedApp?.referenceId}`);
-    return application;
-  }
-  async updateApplication(id, updates) {
-    const application = this.applications.get(id);
-    if (!application) return void 0;
-    const updatedApplication = { ...application, ...updates };
-    this.applications.set(id, updatedApplication);
-    return updatedApplication;
-  }
-  // Notes methods
-  async saveApplicationNote(applicationId, note) {
-    if (!this.applications.has(applicationId)) return false;
-    this.notes.set(applicationId, note);
-    return true;
-  }
-  async getApplicationNote(applicationId) {
-    return this.notes.get(applicationId);
-  }
-  // Activity methods
-  async getActivities() {
-    return Array.from(this.activities.values());
-  }
-  async getActivitiesByUserId(userId) {
-    return Array.from(this.activities.values()).filter((activity) => activity.userId === userId).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  }
-  async createActivity(insertActivity) {
-    const id = this.currentActivityId++;
-    const now = /* @__PURE__ */ new Date();
-    const activity = {
-      ...insertActivity,
-      id,
-      timestamp: now
-    };
-    this.activities.set(id, activity);
-    return activity;
-  }
-};
-var storage = new MemStorage();
-
-// server/auth.ts
-import passport from "passport";
-import { Strategy as LocalStrategy } from "passport-local";
-import session2 from "express-session";
-import { scrypt, randomBytes, timingSafeEqual } from "crypto";
-import { promisify } from "util";
+// server/connection.ts
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
+var DB_CONNECTION_STRING = process.env.DB_CONNECTION_STRING || "postgresql://neondb_owner:npg_eFrPutD1n9dE@ep-aged-darkness-a1bh7bgl-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require";
+var queryClient = postgres(DB_CONNECTION_STRING, {
+  ssl: "require",
+  // Needed for Neon.tech
+  max: 10,
+  // Connection pool size
+  idle_timeout: 20,
+  // How long a connection can be idle before being closed
+  connect_timeout: 30
+  // Connection timeout in seconds
+});
+var db = drizzle(queryClient);
 
 // shared/schema.ts
 import { pgTable, text, serial, integer, timestamp, json } from "drizzle-orm/pg-core";
@@ -336,8 +142,288 @@ var activities = pgTable("activities", {
 });
 var insertActivitySchema = createInsertSchema(activities);
 
+// server/unified-storage.ts
+import { eq, desc } from "drizzle-orm";
+import { v4 as uuidv4 } from "uuid";
+import createMemoryStore from "memorystore";
+import session from "express-session";
+var MemoryStore = createMemoryStore(session);
+var PostgresStorage = class {
+  sessionStore;
+  constructor() {
+    console.log("PostgresStorage constructor called");
+    this.sessionStore = null;
+  }
+  setSessionStore(store) {
+    console.log("Setting session store");
+    this.sessionStore = store;
+  }
+  // User methods
+  async getUser(id) {
+    try {
+      console.log(`Getting user ${id} from PostgreSQL`);
+      const users2 = await db.select().from(users).where(eq(users.id, id));
+      console.log(`User found: ${users2.length > 0}`);
+      return users2[0];
+    } catch (error) {
+      console.error("PostgreSQL error in getUser:", error);
+      throw error;
+    }
+  }
+  async getUserByUsername(username) {
+    try {
+      console.log(`Getting user by username ${username} from PostgreSQL`);
+      const users2 = await db.select().from(users).where(eq(users.username, username));
+      console.log(`User found: ${users2.length > 0}`);
+      return users2[0];
+    } catch (error) {
+      console.error("PostgreSQL error in getUserByUsername:", error);
+      throw error;
+    }
+  }
+  async createUser(insertUser) {
+    try {
+      console.log("Creating user in PostgreSQL");
+      const users2 = await db.insert(users).values(insertUser).returning();
+      console.log("User created in PostgreSQL");
+      return users2[0];
+    } catch (error) {
+      console.error("PostgreSQL error in createUser:", error);
+      throw error;
+    }
+  }
+  async getUsers() {
+    try {
+      console.log("Getting all users from PostgreSQL");
+      const users2 = await db.select().from(users);
+      console.log(`Retrieved ${users2.length} users from PostgreSQL`);
+      return users2;
+    } catch (error) {
+      console.error("PostgreSQL error in getUsers:", error);
+      throw error;
+    }
+  }
+  // Job methods
+  async getJobs() {
+    try {
+      console.log("Getting all jobs from PostgreSQL");
+      const jobs = await db.select().from(jobListings).orderBy(desc(jobListings.createdAt));
+      console.log(`Retrieved ${jobs.length} jobs from PostgreSQL`);
+      return jobs;
+    } catch (error) {
+      console.error("PostgreSQL error in getJobs:", error);
+      throw error;
+    }
+  }
+  async getJobById(id) {
+    try {
+      console.log(`Getting job ${id} from PostgreSQL`);
+      const jobs = await db.select().from(jobListings).where(eq(jobListings.id, id));
+      console.log(`Job found: ${jobs.length > 0}`);
+      return jobs[0];
+    } catch (error) {
+      console.error("PostgreSQL error in getJobById:", error);
+      throw error;
+    }
+  }
+  async getJobsByUserId(userId) {
+    try {
+      console.log(`Getting jobs for user ${userId} from PostgreSQL`);
+      const jobs = await db.select().from(jobListings).where(eq(jobListings.userId, userId));
+      console.log(`Retrieved ${jobs.length} jobs for user ${userId} from PostgreSQL`);
+      return jobs;
+    } catch (error) {
+      console.error("PostgreSQL error in getJobsByUserId:", error);
+      throw error;
+    }
+  }
+  async createJob(insertJob) {
+    try {
+      console.log("Creating job in PostgreSQL:", JSON.stringify(insertJob));
+      const jobs = await db.insert(jobListings).values(insertJob).returning();
+      console.log("Job created in PostgreSQL:", JSON.stringify(jobs[0]));
+      return jobs[0];
+    } catch (error) {
+      console.error("PostgreSQL error in createJob:", error);
+      console.error("Error details:", error.message);
+      throw error;
+    }
+  }
+  async updateJob(id, updateData) {
+    try {
+      console.log(`Updating job ${id} in PostgreSQL:`, JSON.stringify(updateData));
+      const jobs = await db.update(jobListings).set(updateData).where(eq(jobListings.id, id)).returning();
+      console.log("Job updated in PostgreSQL");
+      return jobs[0];
+    } catch (error) {
+      console.error("PostgreSQL error in updateJob:", error);
+      throw error;
+    }
+  }
+  async deleteJob(id) {
+    try {
+      console.log(`Deleting job ${id} from PostgreSQL`);
+      await db.delete(jobListings).where(eq(jobListings.id, id));
+      console.log("Job deleted from PostgreSQL");
+      return true;
+    } catch (error) {
+      console.error("PostgreSQL error in deleteJob:", error);
+      throw error;
+    }
+  }
+  // Application methods
+  async getApplications() {
+    try {
+      console.log("Getting all applications from PostgreSQL");
+      const applications2 = await db.select().from(applications).orderBy(desc(applications.submittedAt));
+      console.log(`Retrieved ${applications2.length} applications from PostgreSQL`);
+      return applications2;
+    } catch (error) {
+      console.error("PostgreSQL error in getApplications:", error);
+      throw error;
+    }
+  }
+  async getApplicationById(id) {
+    try {
+      console.log(`Getting application ${id} from PostgreSQL`);
+      const applications2 = await db.select().from(applications).where(eq(applications.id, id));
+      console.log(`Application found: ${applications2.length > 0}`);
+      return applications2[0];
+    } catch (error) {
+      console.error("PostgreSQL error in getApplicationById:", error);
+      throw error;
+    }
+  }
+  async getApplicationsByJobId(jobId) {
+    try {
+      console.log(`Getting applications for job ${jobId} from PostgreSQL`);
+      const applications2 = await db.select().from(applications).where(eq(applications.jobId, jobId));
+      console.log(`Retrieved ${applications2.length} applications for job ${jobId} from PostgreSQL`);
+      return applications2;
+    } catch (error) {
+      console.error("PostgreSQL error in getApplicationsByJobId:", error);
+      throw error;
+    }
+  }
+  async getApplicationsForUser(userId) {
+    try {
+      console.log(`Getting applications for user ${userId} from PostgreSQL`);
+      const jobs = await this.getJobsByUserId(userId);
+      const jobIds = jobs.map((job) => job.id);
+      if (jobIds.length === 0) {
+        console.log(`User ${userId} has no jobs, returning empty applications array`);
+        return [];
+      }
+      const applications2 = await db.select().from(applications).where(
+        applications.jobId.in(jobIds)
+      );
+      console.log(`Retrieved ${applications2.length} applications for user ${userId} from PostgreSQL`);
+      return applications2;
+    } catch (error) {
+      console.error("PostgreSQL error in getApplicationsForUser:", error);
+      throw error;
+    }
+  }
+  async createApplication(insertApplication) {
+    try {
+      console.log("Creating application in PostgreSQL");
+      const referenceId = this.generateReferenceId();
+      const applications2 = await db.insert(applications).values({ ...insertApplication, referenceId }).returning();
+      console.log("Application created in PostgreSQL");
+      return applications2[0];
+    } catch (error) {
+      console.error("PostgreSQL error in createApplication:", error);
+      throw error;
+    }
+  }
+  async updateApplication(id, updateData) {
+    try {
+      console.log(`Updating application ${id} in PostgreSQL`);
+      const applications2 = await db.update(applications).set(updateData).where(eq(applications.id, id)).returning();
+      console.log("Application updated in PostgreSQL");
+      return applications2[0];
+    } catch (error) {
+      console.error("PostgreSQL error in updateApplication:", error);
+      throw error;
+    }
+  }
+  // Notes methods
+  async saveApplicationNote(applicationId, note) {
+    try {
+      console.log(`Saving note for application ${applicationId} in PostgreSQL`);
+      await db.update(applications).set({ notes: note }).where(eq(applications.id, applicationId));
+      console.log("Note saved in PostgreSQL");
+      return true;
+    } catch (error) {
+      console.error("PostgreSQL error in saveApplicationNote:", error);
+      throw error;
+    }
+  }
+  async getApplicationNote(applicationId) {
+    try {
+      console.log(`Getting note for application ${applicationId} from PostgreSQL`);
+      const application = await this.getApplicationById(applicationId);
+      console.log(`Note found: ${application?.notes ? "yes" : "no"}`);
+      return application?.notes;
+    } catch (error) {
+      console.error("PostgreSQL error in getApplicationNote:", error);
+      throw error;
+    }
+  }
+  // Activity methods
+  async getActivities() {
+    try {
+      console.log("Getting all activities from PostgreSQL");
+      const activities2 = await db.select().from(activities);
+      console.log(`Retrieved ${activities2.length} activities from PostgreSQL`);
+      return activities2;
+    } catch (error) {
+      console.error("PostgreSQL error in getActivities:", error);
+      throw error;
+    }
+  }
+  async getActivitiesByUserId(userId) {
+    try {
+      console.log(`Getting activities for user ${userId} from PostgreSQL`);
+      const activities2 = await db.select().from(activities).where(eq(activities.userId, userId)).orderBy(desc(activities.timestamp));
+      console.log(`Retrieved ${activities2.length} activities for user ${userId} from PostgreSQL`);
+      return activities2;
+    } catch (error) {
+      console.error("PostgreSQL error in getActivitiesByUserId:", error);
+      throw error;
+    }
+  }
+  async createActivity(insertActivity) {
+    try {
+      console.log("Creating activity in PostgreSQL");
+      const activities2 = await db.insert(activities).values(insertActivity).returning();
+      console.log("Activity created in PostgreSQL");
+      return activities2[0];
+    } catch (error) {
+      console.error("PostgreSQL error in createActivity:", error);
+      throw error;
+    }
+  }
+  // Helper method
+  generateReferenceId() {
+    const year = (/* @__PURE__ */ new Date()).getFullYear();
+    const randomPart = uuidv4().substring(0, 5).toUpperCase();
+    return `SEV-${year}-${randomPart}`;
+  }
+};
+var storage = new PostgresStorage();
+function setSessionStore(store) {
+  console.log("setSessionStore called");
+  storage.setSessionStore(store);
+}
+
 // server/auth.ts
+import passport from "passport";
+import { Strategy as LocalStrategy } from "passport-local";
+import { scrypt, randomBytes, timingSafeEqual } from "crypto";
+import { promisify } from "util";
 import { fromZodError } from "zod-validation-error";
+import { eq as eq2 } from "drizzle-orm";
 var scryptAsync = promisify(scrypt);
 async function hashPassword(password) {
   const salt = randomBytes(16).toString("hex");
@@ -351,43 +437,66 @@ async function comparePasswords(supplied, stored) {
   return timingSafeEqual(hashedBuf, suppliedBuf);
 }
 function setupAuth(app2) {
-  const sessionSecret = process.env.SESSION_SECRET || randomBytes(32).toString("hex");
-  const sessionSettings = {
-    secret: sessionSecret,
-    resave: false,
-    saveUninitialized: false,
-    store: storage.sessionStore,
-    cookie: {
-      maxAge: 7 * 24 * 60 * 60 * 1e3
-      // 1 week
-    }
-  };
-  app2.set("trust proxy", 1);
-  app2.use(session2(sessionSettings));
   app2.use(passport.initialize());
   app2.use(passport.session());
   passport.use(
-    new LocalStrategy(async (username, password, done) => {
-      try {
-        const user = await storage.getUserByUsername(username);
-        if (!user || !await comparePasswords(password, user.password)) {
-          return done(null, false);
-        } else {
-          return done(null, user);
+    new LocalStrategy(
+      { passReqToCallback: true },
+      // This is the key change
+      async (req, username, password, done) => {
+        try {
+          let user;
+          if (req.db) {
+            try {
+              const result = await req.db.select().from(users).where(eq2(users.username, username));
+              user = result.length > 0 ? result[0] : null;
+            } catch (err) {
+              console.error("Error querying PostgreSQL:", err);
+              user = await storage.getUserByUsername(username);
+            }
+          } else {
+            user = await storage.getUserByUsername(username);
+          }
+          if (!user || !await comparePasswords(password, user.password)) {
+            return done(null, false);
+          } else {
+            return done(null, user);
+          }
+        } catch (error) {
+          return done(error);
         }
-      } catch (error) {
-        return done(error);
       }
-    })
+    )
   );
   passport.serializeUser((user, done) => done(null, user.id));
   passport.deserializeUser(async (id, done) => {
     try {
-      const user = await storage.getUser(id);
-      done(null, user);
+      try {
+        const user = await storage.getUser(id);
+        if (user) {
+          return done(null, user);
+        }
+      } catch (err) {
+        console.log("In-memory storage lookup failed:", err.message);
+      }
+      return done(null, { id });
     } catch (error) {
+      console.error("Error deserializing user:", error);
       done(error);
     }
+  });
+  app2.use(async (req, res, next) => {
+    if (req.user && req.db && Object.keys(req.user).length === 1 && req.user.id) {
+      try {
+        const result = await req.db.select().from(users).where(eq2(users.id, req.user.id));
+        if (result.length > 0) {
+          req.user = result[0];
+        }
+      } catch (error) {
+        console.error("Error fetching full user from PostgreSQL:", error);
+      }
+    }
+    next();
   });
   app2.post("/api/register", async (req, res, next) => {
     try {
@@ -396,21 +505,50 @@ function setupAuth(app2) {
         const validationError = fromZodError(parseResult.error);
         return res.status(400).json({ error: validationError.message });
       }
-      const existingUser = await storage.getUserByUsername(parseResult.data.username);
+      let existingUser;
+      let allUsers;
+      if (req.db) {
+        try {
+          const result = await req.db.select().from(users).where(eq2(users.username, parseResult.data.username));
+          existingUser = result.length > 0 ? result[0] : null;
+          allUsers = await req.db.select().from(users);
+        } catch (error) {
+          console.error("Error checking existing users in PostgreSQL:", error);
+          existingUser = await storage.getUserByUsername(parseResult.data.username);
+          allUsers = await storage.getUsers();
+        }
+      } else {
+        existingUser = await storage.getUserByUsername(parseResult.data.username);
+        allUsers = await storage.getUsers();
+      }
       if (existingUser) {
         return res.status(400).json({ error: "Username already exists" });
       }
-      const allUsers = await storage.getUsers();
       const existingFranchiseeId = allUsers.find(
         (u) => u.franchiseeId === parseResult.data.franchiseeId
       );
       if (existingFranchiseeId) {
         return res.status(400).json({ error: "Franchisee ID already exists" });
       }
-      const user = await storage.createUser({
+      const userData = {
         ...parseResult.data,
         password: await hashPassword(parseResult.data.password)
-      });
+      };
+      let user;
+      if (req.db) {
+        try {
+          const result = await req.db.insert(users).values(userData).returning();
+          user = result.length > 0 ? result[0] : null;
+        } catch (error) {
+          console.error("Error creating user in PostgreSQL:", error);
+          return res.status(500).json({ error: "Failed to create user in database" });
+        }
+      } else {
+        user = await storage.createUser(userData);
+      }
+      if (!user) {
+        throw new Error("Failed to create user");
+      }
       req.login(user, (err) => {
         if (err) return next(err);
         const { password, ...userWithoutPassword } = user;
@@ -1246,22 +1384,23 @@ function setupFileUpload(app2) {
 }
 
 // server/index.ts
-import session3 from "express-session";
+import session2 from "express-session";
 import MemoryStore2 from "memorystore";
 import ConnectPgSimple from "connect-pg-simple";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { drizzle as drizzle2 } from "drizzle-orm/postgres-js";
+import postgres2 from "postgres";
+import { sql } from "drizzle-orm";
 var DB_TYPE = process.env.DB_TYPE || "postgres";
-var DB_CONNECTION_STRING = process.env.DB_CONNECTION_STRING || "postgresql://neondb_owner:npg_eFrPutD1n9dE@ep-aged-darkness-a1bh7bgl-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require";
+var DB_CONNECTION_STRING2 = process.env.DB_CONNECTION_STRING || "postgresql://neondb_owner:npg_eFrPutD1n9dE@ep-aged-darkness-a1bh7bgl-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require";
 var SESSION_SECRET = process.env.SESSION_SECRET || "seven-eleven-careers-secret";
 var app = express3();
 app.use(express3.json());
 app.use(express3.urlencoded({ extended: false }));
-var db = null;
+var db2 = null;
 if (DB_TYPE === "postgres") {
   try {
     console.log("Attempting to connect to PostgreSQL...");
-    const queryClient = postgres(DB_CONNECTION_STRING, {
+    const queryClient2 = postgres2(DB_CONNECTION_STRING2, {
       ssl: "require",
       // Needed for Neon.tech
       max: 10,
@@ -1271,12 +1410,17 @@ if (DB_TYPE === "postgres") {
       connect_timeout: 30
       // Connection timeout in seconds
     });
-    queryClient`SELECT 1`.then(() => {
+    queryClient2`SELECT 1`.then(() => {
       console.log("PostgreSQL connection test successful");
+      if (db2) {
+        console.log("Testing database tables...");
+        db2.select({ count: sql`count(*)` }).from(users).then((result) => console.log("Users table count:", result)).catch((error) => console.error("Users table test failed:", error));
+        db2.select({ count: sql`count(*)` }).from(jobListings).then((result) => console.log("Jobs table count:", result)).catch((error) => console.error("Jobs table test failed:", error));
+      }
     }).catch((error) => {
       console.error("PostgreSQL connection test failed:", error);
     });
-    db = drizzle(queryClient);
+    db2 = drizzle2(queryClient2);
     log("PostgreSQL database connection initialized");
   } catch (error) {
     console.error("Failed to initialize PostgreSQL connection:", error);
@@ -1286,33 +1430,36 @@ if (DB_TYPE === "postgres") {
 var sessionConfig = {
   secret: SESSION_SECRET,
   resave: false,
+  // proxy: true,
   saveUninitialized: false,
   cookie: {
-    secure: process.env.NODE_ENV === "production",
+    secure: false,
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1e3
     // 24 hours
+    //sameSite: 'lax'
   }
 };
 if (DB_TYPE === "postgres") {
-  const PgStore = ConnectPgSimple(session3);
+  const PgStore = ConnectPgSimple(session2);
   sessionConfig.store = new PgStore({
-    conString: DB_CONNECTION_STRING,
+    conString: DB_CONNECTION_STRING2,
     // Use the connection string directly
     tableName: "sessions",
     createTableIfMissing: true,
     ssl: true
   });
   log("Using PostgreSQL for session storage");
+  setSessionStore(sessionConfig.store);
 } else {
-  const MemStore = MemoryStore2(session3);
+  const MemStore = MemoryStore2(session2);
   sessionConfig.store = new MemStore({
     checkPeriod: 864e5
     // prune expired entries every 24h
   });
   log("Using in-memory session storage");
 }
-app.use(session3(sessionConfig));
+app.use(session2(sessionConfig));
 app.use((req, res, next) => {
   const start = Date.now();
   const path4 = req.path;
@@ -1356,8 +1503,8 @@ app.use((req, res, next) => {
   next();
 });
 app.use((req, res, next) => {
-  if (db) {
-    req.db = db;
+  if (db2) {
+    req.db = db2;
   }
   next();
 });
@@ -1386,3 +1533,7 @@ app.use((req, res, next) => {
     log(`Environment: ${app.get("env")}`);
   });
 })();
+export {
+  DB_CONNECTION_STRING2 as DB_CONNECTION_STRING,
+  DB_TYPE
+};

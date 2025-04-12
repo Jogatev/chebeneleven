@@ -37,69 +37,164 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 };
 exports.__esModule = true;
 exports.sendTestEmail = exports.sendStatusUpdateEmail = exports.sendApplicationConfirmation = void 0;
-var resend_1 = require("resend");
-// Use environment variable, or fallback to the provided key
-var resend = new resend_1.Resend(process.env.RESEND_API_KEY || 're_Pde6EzHS_A9wgyWzhrvDa2qZ5qhJnK8Kx');
-// Update sender email to use your domain (after domain verification)
-var SENDER_EMAIL = '7-Eleven Careers <careers@cheebeeeneeleebeen.online>';
-// Add logging to track email sending more clearly
+// Brevo Mail Service
+var nodemailer_1 = require("nodemailer");
+var axios_1 = require("axios");
+// SMTP Configuration for Brevo
+var smtpTransport = nodemailer_1["default"].createTransport({
+    host: 'smtp-relay.brevo.com',
+    port: 587,
+    secure: false,
+    auth: {
+        user: '8a3c5a001@smtp-brevo.com',
+        pass: '73kHjzqSK8YL6Fas'
+    }
+});
+// API Configuration for Brevo
+var BREVO_API_KEY = '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';
+var BREVO_API_URL = 'https://api.brevo.com/v3';
+var SENDER_EMAIL = 'careers@cheebeeneeleebeen.online';
+var SENDER_NAME = '7-Eleven Philippines Recruitment';
+// Logging functions
 function logEmailAttempt(to, subject) {
-    console.log("\uD83D\uDCE7 Attempting to send email: \"" + subject + "\" to " + to);
+    console.log("\uD83D\uDCE7 Sending email: \"" + subject + "\" to " + to);
 }
 function logEmailSuccess(to, messageId) {
-    console.log("\u2705 Email sent successfully to " + to + ", ID: " + messageId);
+    console.log("\u2705 Email sent to " + to + " | Message ID: " + messageId);
 }
 function logEmailError(to, error) {
-    console.error("\u274C Failed to send email to " + to + ":", error);
+    console.error("\u274C Email failed to " + to + ":", error);
 }
+// Choose which method to use - SMTP or API
+// Set to 'smtp' or 'api'
+var EMAIL_METHOD = 'smtp';
+/**
+ * Send email using Brevo SMTP
+ */
+function sendEmailSMTP(to, subject, htmlContent) {
+    return __awaiter(this, void 0, void 0, function () {
+        var mailOptions, info, error_1;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    _a.trys.push([0, 2, , 3]);
+                    mailOptions = {
+                        from: "\"" + SENDER_NAME + "\" <" + SENDER_EMAIL + ">",
+                        to: to,
+                        subject: subject,
+                        html: htmlContent
+                    };
+                    return [4 /*yield*/, smtpTransport.sendMail(mailOptions)];
+                case 1:
+                    info = _a.sent();
+                    return [2 /*return*/, { success: true, messageId: info.messageId }];
+                case 2:
+                    error_1 = _a.sent();
+                    console.error('SMTP sending error:', error_1);
+                    throw error_1;
+                case 3: return [2 /*return*/];
+            }
+        });
+    });
+}
+/**
+ * Send email using Brevo API
+ */
+function sendEmailAPI(to, subject, htmlContent) {
+    var _a, _b, _c;
+    return __awaiter(this, void 0, void 0, function () {
+        var response, error_2;
+        return __generator(this, function (_d) {
+            switch (_d.label) {
+                case 0:
+                    _d.trys.push([0, 2, , 3]);
+                    return [4 /*yield*/, axios_1["default"].post(BREVO_API_URL + "/smtp/email", {
+                            sender: {
+                                name: SENDER_NAME,
+                                email: SENDER_EMAIL
+                            },
+                            to: [{ email: to }],
+                            subject: subject,
+                            htmlContent: htmlContent
+                        }, {
+                            headers: {
+                                'api-key': BREVO_API_KEY,
+                                'Content-Type': 'application/json'
+                            }
+                        })];
+                case 1:
+                    response = _d.sent();
+                    return [2 /*return*/, { success: true, messageId: ((_a = response.data) === null || _a === void 0 ? void 0 : _a.messageId) || 'sent' }];
+                case 2:
+                    error_2 = _d.sent();
+                    console.error('API sending error:', ((_b = error_2.response) === null || _b === void 0 ? void 0 : _b.data) || error_2);
+                    throw ((_c = error_2.response) === null || _c === void 0 ? void 0 : _c.data) || error_2;
+                case 3: return [2 /*return*/];
+            }
+        });
+    });
+}
+/**
+ * Send an email using the configured method (SMTP or API)
+ */
+function sendEmail(to, subject, htmlContent) {
+    return __awaiter(this, void 0, void 0, function () {
+        return __generator(this, function (_a) {
+            if (EMAIL_METHOD === 'smtp') {
+                return [2 /*return*/, sendEmailSMTP(to, subject, htmlContent)];
+            }
+            else {
+                return [2 /*return*/, sendEmailAPI(to, subject, htmlContent)];
+            }
+            return [2 /*return*/];
+        });
+    });
+}
+/**
+ * Send application confirmation email
+ */
 function sendApplicationConfirmation(application, job, referenceId) {
     return __awaiter(this, void 0, void 0, function () {
-        var applicantName, subject, htmlBody, _a, data, error, error_1;
-        return __generator(this, function (_b) {
-            switch (_b.label) {
+        var applicantName, subject, htmlBody, result, error_3;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
                 case 0:
-                    _b.trys.push([0, 2, , 3]);
+                    _a.trys.push([0, 2, , 3]);
                     applicantName = application.firstName + " " + application.lastName;
                     subject = "Your Application for " + job.title + " at 7-Eleven has been received";
                     logEmailAttempt(application.email, subject);
-                    htmlBody = "\n      <div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ccc; border-radius: 8px;\">\n        <div style=\"text-align: center; margin-bottom: 20px;\">\n          <div style=\"font-size: 24px; font-weight: bold;\">\n            <span style=\"color: #008c48;\">7-ELEVEN</span>\n            <span style=\"color: #ff7a00; margin-left: 5px;\">PHILIPPINES</span>\n          </div>\n        </div>\n        \n        <h2 style=\"color: #333; text-align: center;\">Application Confirmation</h2>\n        \n        <p>Dear " + applicantName + ",</p>\n        \n        <p>Thank you for applying to the <strong>" + job.title + "</strong> position at 7-Eleven " + job.location + ". We have received your application and our team will review it shortly.</p>\n        \n        <div style=\"background-color: #f9f9f9; border-left: 4px solid #008c48; padding: 15px; margin: 20px 0;\">\n          <p style=\"margin: 0;\"><strong>Application Reference ID:</strong> " + referenceId + "</p>\n          <p style=\"margin: 10px 0 0;\"><strong>Position:</strong> " + job.title + "</p>\n          <p style=\"margin: 10px 0 0;\"><strong>Location:</strong> " + job.location + "</p>\n          <p style=\"margin: 10px 0 0;\"><strong>Date Applied:</strong> " + new Date().toLocaleDateString() + "</p>\n        </div>\n        \n        <p>What happens next?</p>\n        <ol>\n          <li>Our hiring team will review your application</li>\n          <li>If your qualifications match our requirements, we'll contact you for an interview</li>\n          <li>You will receive updates on your application status via email</li>\n        </ol>\n        \n        <p>Please save your application reference ID for future correspondence.</p>\n        \n        <p>If you have any questions about your application, please contact our HR department.</p>\n        \n        <p>Best regards,<br>\n        7-Eleven Philippines Recruitment Team</p>\n        \n        <div style=\"text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #777; font-size: 12px;\">\n          <p>This is an automated message. Please do not reply to this email.</p>\n        </div>\n      </div>\n    ";
-                    return [4 /*yield*/, resend.emails.send({
-                            from: SENDER_EMAIL,
-                            to: application.email,
-                            subject: subject,
-                            html: htmlBody
-                        })];
+                    htmlBody = "\n      <div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ccc; border-radius: 8px;\">\n        <div style=\"text-align: center; margin-bottom: 20px;\">\n          <div style=\"font-size: 24px; font-weight: bold;\">\n            <span style=\"color: #008c48;\">7-ELEVEN</span>\n            <span style=\"color: #ff7a00;\">PHILIPPINES</span>\n          </div>\n        </div>\n        <h2 style=\"text-align: center;\">Application Confirmation</h2>\n        <p>Dear " + applicantName + ",</p>\n        <p>Thank you for applying to the <strong>" + job.title + "</strong> position at 7-Eleven " + job.location + ". We have received your application and our team will review it shortly.</p>\n        <div style=\"background-color: #f9f9f9; border-left: 4px solid #008c48; padding: 15px; margin: 20px 0;\">\n          <p><strong>Reference ID:</strong> " + referenceId + "</p>\n          <p><strong>Position:</strong> " + job.title + "</p>\n          <p><strong>Location:</strong> " + job.location + "</p>\n          <p><strong>Date Applied:</strong> " + new Date().toLocaleDateString() + "</p>\n        </div>\n        <p>What happens next?</p>\n        <ol>\n          <li>Application review by our team</li>\n          <li>Possible interview invitation if you meet qualifications</li>\n          <li>Status updates via email</li>\n        </ol>\n        <p>Please keep your reference ID safe.</p>\n        <p>For inquiries, contact our HR team.</p>\n        <p>Best regards,<br>7-Eleven Philippines Recruitment Team</p>\n        <div style=\"text-align: center; font-size: 12px; color: #777; border-top: 1px solid #eee; padding-top: 20px;\">\n          <p>This is an automated message. Do not reply.</p>\n        </div>\n      </div>\n    ";
+                    return [4 /*yield*/, sendEmail(application.email, subject, htmlBody)];
                 case 1:
-                    _a = _b.sent(), data = _a.data, error = _a.error;
-                    if (error) {
-                        logEmailError(application.email, error);
-                        throw new Error("Email sending failed: " + error.message);
+                    result = _a.sent();
+                    if (result.success) {
+                        logEmailSuccess(application.email, result.messageId);
+                        return [2 /*return*/, { success: true, messageId: result.messageId || 'unknown' }];
                     }
-                    logEmailSuccess(application.email, data === null || data === void 0 ? void 0 : data.id);
-                    return [2 /*return*/, {
-                            success: true,
-                            messageId: (data === null || data === void 0 ? void 0 : data.id) || 'unknown'
-                        }];
+                    else {
+                        throw new Error("Email sending failed: " + result.error);
+                    }
+                    return [3 /*break*/, 3];
                 case 2:
-                    error_1 = _b.sent();
-                    console.error("Error sending application confirmation email:", error_1);
-                    return [2 /*return*/, {
-                            success: false,
-                            error: error_1.message
-                        }];
+                    error_3 = _a.sent();
+                    console.error("❌ Error in sendApplicationConfirmation:", error_3);
+                    return [2 /*return*/, { success: false, error: error_3.message }];
                 case 3: return [2 /*return*/];
             }
         });
     });
 }
 exports.sendApplicationConfirmation = sendApplicationConfirmation;
+/**
+ * Send status update email
+ */
 function sendStatusUpdateEmail(application, job, status, referenceId) {
     return __awaiter(this, void 0, void 0, function () {
-        var applicantName, statusMap, statusText, subject, statusMessage, nextSteps, htmlBody, _a, data, error, error_2;
-        return __generator(this, function (_b) {
-            switch (_b.label) {
+        var applicantName, statusMap, statusText, subject, statusMessage, nextSteps, htmlBody, result, error_4;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
                 case 0:
-                    _b.trys.push([0, 2, , 3]);
+                    _a.trys.push([0, 2, , 3]);
                     applicantName = application.firstName + " " + application.lastName;
                     statusMap = {
                         submitted: "Submitted",
@@ -112,90 +207,70 @@ function sendStatusUpdateEmail(application, job, status, referenceId) {
                     statusText = statusMap[status] || status;
                     subject = "Your 7-Eleven Job Application Status: " + statusText;
                     logEmailAttempt(application.email, subject);
-                    statusMessage = "";
-                    nextSteps = "";
-                    if (status === "under_review") {
-                        statusMessage = "Your application is currently under review by our hiring team.";
-                        nextSteps = "If your qualifications match our requirements, we will contact you for an interview.";
-                    }
-                    else if (status === "interview") {
-                        statusMessage = "Congratulations! Your application has been selected for an interview.";
-                        nextSteps = "Our HR team will contact you shortly to schedule an interview.";
-                    }
-                    else if (status === "interviewed") {
-                        statusMessage = "Thank you for attending the interview for this position.";
-                        nextSteps = "Our team is currently evaluating all candidates and we will inform you of our decision soon.";
-                    }
-                    else if (status === "accepted") {
-                        statusMessage = "Congratulations! We are pleased to inform you that your application has been accepted.";
-                        nextSteps = "Our HR team will contact you shortly with more details about the next steps.";
-                    }
-                    else if (status === "rejected") {
-                        statusMessage = "Thank you for your interest in the position. After careful consideration, we have decided to proceed with other candidates whose qualifications more closely match our current needs.";
-                        nextSteps = "We encourage you to apply for future positions that match your skills and experience.";
+                    statusMessage = {
+                        under_review: "Your application is currently under review by our hiring team.",
+                        interview: "Congratulations! Your application has been selected for an interview.",
+                        interviewed: "Thank you for attending the interview. We're evaluating all candidates.",
+                        accepted: "Congratulations! Your application has been accepted.",
+                        rejected: "Thank you for applying. We've decided to proceed with other candidates."
+                    }[status] || "Your application status is now: " + statusText;
+                    nextSteps = {
+                        under_review: "We'll contact you if you're shortlisted.",
+                        interview: "Our HR team will schedule your interview.",
+                        interviewed: "Please wait for our decision.",
+                        accepted: "We'll follow up shortly with the next steps.",
+                        rejected: "We encourage you to apply for future openings."
+                    }[status] || "Check your email for further updates.";
+                    htmlBody = "\n      <div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ccc; border-radius: 8px;\">\n        <div style=\"text-align: center; margin-bottom: 20px;\">\n          <div style=\"font-size: 24px; font-weight: bold;\">\n            <span style=\"color: #008c48;\">7-ELEVEN</span>\n            <span style=\"color: #ff7a00;\">PHILIPPINES</span>\n          </div>\n        </div>\n        <h2 style=\"text-align: center;\">Application Status Update</h2>\n        <p>Dear " + applicantName + ",</p>\n        <p>" + statusMessage + "</p>\n        <div style=\"background-color: #f9f9f9; border-left: 4px solid #008c48; padding: 15px; margin: 20px 0;\">\n          <p><strong>Reference ID:</strong> " + referenceId + "</p>\n          <p><strong>Position:</strong> " + job.title + "</p>\n          <p><strong>Location:</strong> " + job.location + "</p>\n          <p><strong>Status:</strong> " + statusText + "</p>\n        </div>\n        <p>" + nextSteps + "</p>\n        <p>For inquiries, contact our HR team with your Reference ID.</p>\n        <p>Best regards,<br>7-Eleven Philippines Recruitment Team</p>\n        <div style=\"text-align: center; font-size: 12px; color: #777; border-top: 1px solid #eee; padding-top: 20px;\">\n          <p>This is an automated message. Do not reply.</p>\n        </div>\n      </div>\n    ";
+                    return [4 /*yield*/, sendEmail(application.email, subject, htmlBody)];
+                case 1:
+                    result = _a.sent();
+                    if (result.success) {
+                        logEmailSuccess(application.email, result.messageId);
+                        return [2 /*return*/, { success: true, messageId: result.messageId || 'unknown' }];
                     }
                     else {
-                        statusMessage = "Your application status has been updated to: " + statusText;
-                        nextSteps = "Please continue to monitor your email for further updates.";
+                        throw new Error("Email sending failed: " + result.error);
                     }
-                    htmlBody = "\n      <div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ccc; border-radius: 8px;\">\n        <div style=\"text-align: center; margin-bottom: 20px;\">\n          <div style=\"font-size: 24px; font-weight: bold;\">\n            <span style=\"color: #008c48;\">7-ELEVEN</span>\n            <span style=\"color: #ff7a00; margin-left: 5px;\">PHILIPPINES</span>\n          </div>\n        </div>\n        \n        <h2 style=\"color: #333; text-align: center;\">Application Status Update</h2>\n        \n        <p>Dear " + applicantName + ",</p>\n        \n        <p>" + statusMessage + "</p>\n        \n        <div style=\"background-color: #f9f9f9; border-left: 4px solid #008c48; padding: 15px; margin: 20px 0;\">\n          <p style=\"margin: 0;\"><strong>Application Reference ID:</strong> " + referenceId + "</p>\n          <p style=\"margin: 10px 0 0;\"><strong>Position:</strong> " + job.title + "</p>\n          <p style=\"margin: 10px 0 0;\"><strong>Location:</strong> " + job.location + "</p>\n          <p style=\"margin: 10px 0 0;\"><strong>Current Status:</strong> " + statusText + "</p>\n        </div>\n        \n        <p>" + nextSteps + "</p>\n        \n        <p>If you have any questions, please contact our HR department and reference your Application ID.</p>\n        \n        <p>Best regards,<br>\n        7-Eleven Philippines Recruitment Team</p>\n        \n        <div style=\"text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #777; font-size: 12px;\">\n          <p>This is an automated message. Please do not reply to this email.</p>\n        </div>\n      </div>\n    ";
-                    return [4 /*yield*/, resend.emails.send({
-                            from: SENDER_EMAIL,
-                            to: application.email,
-                            subject: subject,
-                            html: htmlBody
-                        })];
-                case 1:
-                    _a = _b.sent(), data = _a.data, error = _a.error;
-                    if (error) {
-                        logEmailError(application.email, error);
-                        throw new Error("Email sending failed: " + error.message);
-                    }
-                    logEmailSuccess(application.email, data === null || data === void 0 ? void 0 : data.id);
-                    return [2 /*return*/, {
-                            success: true,
-                            messageId: (data === null || data === void 0 ? void 0 : data.id) || 'unknown'
-                        }];
+                    return [3 /*break*/, 3];
                 case 2:
-                    error_2 = _b.sent();
-                    console.error("Error sending status update email:", error_2);
-                    return [2 /*return*/, {
-                            success: false,
-                            error: error_2.message
-                        }];
+                    error_4 = _a.sent();
+                    console.error("❌ Error in sendStatusUpdateEmail:", error_4);
+                    return [2 /*return*/, { success: false, error: error_4.message }];
                 case 3: return [2 /*return*/];
             }
         });
     });
 }
 exports.sendStatusUpdateEmail = sendStatusUpdateEmail;
+/**
+ * Send test email
+ */
 function sendTestEmail(to) {
     return __awaiter(this, void 0, void 0, function () {
-        var subject, _a, data, error, error_3;
-        return __generator(this, function (_b) {
-            switch (_b.label) {
+        var subject, html, result, error_5;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
                 case 0:
-                    _b.trys.push([0, 2, , 3]);
+                    _a.trys.push([0, 2, , 3]);
                     subject = 'Test Email from 7-Eleven Application System';
                     logEmailAttempt(to, subject);
-                    return [4 /*yield*/, resend.emails.send({
-                            from: SENDER_EMAIL,
-                            to: to,
-                            subject: subject,
-                            html: '<p>This is a test email from the 7-Eleven application system.</p><p>If you received this, email sending is working correctly!</p>'
-                        })];
+                    html = "\n      <p>This is a test email from the 7-Eleven application system.</p>\n      <p>If you received this, your email setup is working correctly!</p>\n    ";
+                    return [4 /*yield*/, sendEmail(to, subject, html)];
                 case 1:
-                    _a = _b.sent(), data = _a.data, error = _a.error;
-                    if (error) {
-                        logEmailError(to, error);
-                        return [2 /*return*/, { success: false, error: error.message }];
+                    result = _a.sent();
+                    if (result.success) {
+                        logEmailSuccess(to, result.messageId);
+                        return [2 /*return*/, { success: true, messageId: result.messageId }];
                     }
-                    logEmailSuccess(to, data === null || data === void 0 ? void 0 : data.id);
-                    return [2 /*return*/, { success: true, messageId: data === null || data === void 0 ? void 0 : data.id }];
+                    else {
+                        throw new Error("Email sending failed: " + result.error);
+                    }
+                    return [3 /*break*/, 3];
                 case 2:
-                    error_3 = _b.sent();
-                    console.error("Error in sendTestEmail:", error_3);
-                    return [2 /*return*/, { success: false, error: error_3.message }];
+                    error_5 = _a.sent();
+                    console.error("❌ Error in sendTestEmail:", error_5);
+                    return [2 /*return*/, { success: false, error: error_5.message }];
                 case 3: return [2 /*return*/];
             }
         });

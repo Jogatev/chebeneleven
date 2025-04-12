@@ -38,8 +38,8 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 exports.__esModule = true;
 exports.sendTestEmail = exports.sendStatusUpdateEmail = exports.sendApplicationConfirmation = void 0;
 var resend_1 = require("resend");
-var resend = new resend_1.Resend(process.env.RESEND_API_KEY || 're_Hywa1czp_PV64Ygb6F5o43CmUjSoMnmxc');
-var SENDER_EMAIL = 'chiiibiiiniliiibinn@resend.dev';
+var resend = new resend_1.Resend(process.env.RESEND_API_KEY || 're_LPWxpWuw_BwiFm1syhyR6dx5x21h1Lh5b');
+var SENDER_EMAIL = 'careers@cheebeeneeleebeen.online';
 function sendApplicationConfirmation(application, job, referenceId) {
     return __awaiter(this, void 0, void 0, function () {
         var applicantName, subject, htmlBody, _a, data, error, error_1;
