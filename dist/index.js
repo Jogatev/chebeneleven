@@ -592,8 +592,8 @@ import { fromZodError as fromZodError2 } from "zod-validation-error";
 
 // server/email-service.ts
 import { Resend } from "resend";
-var resend = new Resend(process.env.RESEND_API_KEY || "re_Hywa1czp_PV64Ygb6F5o43CmUjSoMnmxc");
-var SENDER_EMAIL = "chiiibiiiniliiibinn@resend.dev";
+var resend = new Resend(process.env.RESEND_API_KEY || "re_LPWxpWuw_BwiFm1syhyR6dx5x21h1Lh5b");
+var SENDER_EMAIL = "careers@cheebeeneeleebeen.online";
 async function sendApplicationConfirmation(application, job, referenceId) {
   try {
     const applicantName = `${application.firstName} ${application.lastName}`;
