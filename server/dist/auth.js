@@ -112,7 +112,7 @@ function setupAuth(app) {
             maxAge: 7 * 24 * 60 * 60 * 1000
         }
     };
-    app.set("trust proxy", 1);
+    //app.set("trust proxy", 1);
     app.use(express_session_1["default"](sessionSettings));
     app.use(passport_1["default"].initialize());
     app.use(passport_1["default"].session());
