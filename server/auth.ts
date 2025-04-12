@@ -32,19 +32,19 @@ async function comparePasswords(supplied: string, stored: string) {
 
 export function setupAuth(app: Express) {
   // If no SESSION_SECRET is set, create a random one
-  const sessionSecret = process.env.SESSION_SECRET || randomBytes(32).toString("hex");
+  //const sessionSecret = process.env.SESSION_SECRET || randomBytes(32).toString("hex");
 
-  const sessionSettings: session.SessionOptions = {
-    secret: sessionSecret,
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 1 week
-    }
-  };
+ // const sessionSettings: session.SessionOptions = {
+   // secret: sessionSecret,
+   // resave: false,
+   // saveUninitialized: false,
+   // cookie: {
+    //  maxAge: 7 * 24 * 60 * 60 * 1000, // 1 week
+   // }
+//  };
 
   //app.set("trust proxy", 1);
-  app.use(session(sessionSettings));
+//  app.use(session(sessionSettings));
   app.use(passport.initialize());
   app.use(passport.session());
 

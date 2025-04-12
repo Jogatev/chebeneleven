@@ -1,16 +1,30 @@
-
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY || 're_Hywa1czp_PV64Ygb6F5o43CmUjSoMnmxc');
+// Use environment variable, or fallback to the provided key
+const resend = new Resend(process.env.RESEND_API_KEY || 're_Pde6EzHS_A9wgyWzhrvDa2qZ5qhJnK8Kx');
 
-const SENDER_EMAIL = 'onboarding@resend.dev'; 
+// Update sender email to use your domain (after domain verification)
+const SENDER_EMAIL = '7-Eleven Careers <careers@cheebeeeneeleebeen.online>';
+
+// Add logging to track email sending more clearly
+function logEmailAttempt(to, subject) {
+  console.log(`📧 Attempting to send email: "${subject}" to ${to}`);
+}
+
+function logEmailSuccess(to, messageId) {
+  console.log(`✅ Email sent successfully to ${to}, ID: ${messageId}`);
+}
+
+function logEmailError(to, error) {
+  console.error(`❌ Failed to send email to ${to}:`, error);
+}
 
 export async function sendApplicationConfirmation(application, job, referenceId) {
   try {
     const applicantName = `${application.firstName} ${application.lastName}`;
-    
     const subject = `Your Application for ${job.title} at 7-Eleven has been received`;
     
+    logEmailAttempt(application.email, subject);
     
     const htmlBody = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ccc; border-radius: 8px;">
@@ -62,11 +76,11 @@ export async function sendApplicationConfirmation(application, job, referenceId)
     });
 
     if (error) {
-      console.error("Resend API error:", error);
+      logEmailError(application.email, error);
       throw new Error(`Email sending failed: ${error.message}`);
     }
     
-    console.log("Email sent successfully, ID:", data?.id);
+    logEmailSuccess(application.email, data?.id);
     
     return {
       success: true,
@@ -97,6 +111,8 @@ export async function sendStatusUpdateEmail(application, job, status, referenceI
     const statusText = statusMap[status] || status;
     
     const subject = `Your 7-Eleven Job Application Status: ${statusText}`;
+    
+    logEmailAttempt(application.email, subject);
     
     let statusMessage = "";
     let nextSteps = "";
@@ -164,11 +180,11 @@ export async function sendStatusUpdateEmail(application, job, status, referenceI
     });
 
     if (error) {
-      console.error("Resend API error:", error);
+      logEmailError(application.email, error);
       throw new Error(`Email sending failed: ${error.message}`);
     }
     
-    console.log("Status update email sent successfully, ID:", data?.id);
+    logEmailSuccess(application.email, data?.id);
     
     return {
       success: true,
@@ -185,19 +201,25 @@ export async function sendStatusUpdateEmail(application, job, status, referenceI
 
 export async function sendTestEmail(to) {
   try {
+    const subject = 'Test Email from 7-Eleven Application System';
+    logEmailAttempt(to, subject);
+    
     const { data, error } = await resend.emails.send({
       from: SENDER_EMAIL,
       to: to,
-      subject: 'Test Email from 7-Eleven Application System',
+      subject: subject,
       html: '<p>This is a test email from the 7-Eleven application system.</p><p>If you received this, email sending is working correctly!</p>',
     });
 
     if (error) {
+      logEmailError(to, error);
       return { success: false, error: error.message };
     }
     
+    logEmailSuccess(to, data?.id);
     return { success: true, messageId: data?.id };
   } catch (error) {
+    console.error("Error in sendTestEmail:", error);
     return { success: false, error: error.message };
   }
 }

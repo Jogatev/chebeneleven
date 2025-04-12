@@ -61,7 +61,6 @@ exports.__esModule = true;
 exports.setupAuth = void 0;
 var passport_1 = require("passport");
 var passport_local_1 = require("passport-local");
-var express_session_1 = require("express-session");
 var crypto_1 = require("crypto");
 var util_1 = require("util");
 var unified_storage_1 = require("./unified-storage");
@@ -101,19 +100,19 @@ function comparePasswords(supplied, stored) {
     });
 }
 function setupAuth(app) {
-    var _this = this;
     // If no SESSION_SECRET is set, create a random one
-    var sessionSecret = process.env.SESSION_SECRET || crypto_1.randomBytes(32).toString("hex");
-    var sessionSettings = {
-        secret: sessionSecret,
-        resave: false,
-        saveUninitialized: false,
-        cookie: {
-            maxAge: 7 * 24 * 60 * 60 * 1000
-        }
-    };
+    //const sessionSecret = process.env.SESSION_SECRET || randomBytes(32).toString("hex");
+    var _this = this;
+    // const sessionSettings: session.SessionOptions = {
+    // secret: sessionSecret,
+    // resave: false,
+    // saveUninitialized: false,
+    // cookie: {
+    //  maxAge: 7 * 24 * 60 * 60 * 1000, // 1 week
+    // }
+    //  };
     //app.set("trust proxy", 1);
-    app.use(express_session_1["default"](sessionSettings));
+    //  app.use(session(sessionSettings));
     app.use(passport_1["default"].initialize());
     app.use(passport_1["default"].session());
     // Define the local strategy with explicit access to request

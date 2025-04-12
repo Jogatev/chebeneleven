@@ -22,7 +22,7 @@ export const DB_CONNECTION_STRING = process.env.DB_CONNECTION_STRING || 'postgre
 const SESSION_SECRET = process.env.SESSION_SECRET || 'seven-eleven-careers-secret';
 
 const app = express();
-app.set('trust proxy', 1);
+//app.set('trust proxy', 1);
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -71,13 +71,13 @@ if (DB_TYPE === 'postgres') {
 const sessionConfig: session.SessionOptions = {
   secret: SESSION_SECRET,
   resave: false,
-  proxy: true,
+ // proxy: true,
   saveUninitialized: false,
   cookie: {
     secure: false,
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    sameSite: 'lax'
+    //sameSite: 'lax'
   },
 };
 

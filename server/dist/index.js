@@ -65,7 +65,7 @@ exports.DB_TYPE = process.env.DB_TYPE || 'postgres';
 exports.DB_CONNECTION_STRING = process.env.DB_CONNECTION_STRING || 'postgresql://neondb_owner:npg_eFrPutD1n9dE@ep-aged-darkness-a1bh7bgl-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require';
 var SESSION_SECRET = process.env.SESSION_SECRET || 'seven-eleven-careers-secret';
 var app = express_1["default"]();
-app.set('trust proxy', 1);
+//app.set('trust proxy', 1);
 app.use(express_1["default"].json());
 app.use(express_1["default"].urlencoded({ extended: false }));
 // Initialize database connection if using PostgreSQL
@@ -107,13 +107,12 @@ if (exports.DB_TYPE === 'postgres') {
 var sessionConfig = {
     secret: SESSION_SECRET,
     resave: false,
-    proxy: true,
+    // proxy: true,
     saveUninitialized: false,
     cookie: {
         secure: false,
         httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000,
-        sameSite: 'lax'
+        maxAge: 24 * 60 * 60 * 1000
     }
 };
 if (exports.DB_TYPE === 'postgres') {
