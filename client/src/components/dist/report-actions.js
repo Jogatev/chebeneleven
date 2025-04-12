@@ -51,10 +51,10 @@ function ReportActions(_a) {
     var formatDate = function (dateStr) {
         try {
             if (!dateStr)
-                return '';
+                return 'N/A';
             var date = new Date(dateStr);
             if (isNaN(date.getTime()))
-                return dateStr;
+                return 'N/A';
             return date.toLocaleString('en-US', {
                 year: 'numeric',
                 month: 'short',
@@ -65,7 +65,7 @@ function ReportActions(_a) {
             });
         }
         catch (e) {
-            return dateStr;
+            return 'N/A';
         }
     };
     // Handle PDF export
@@ -268,14 +268,33 @@ function ReportActions(_a) {
                 currentY_1 += 25;
                 // If the job has applications, list them
                 if (jobApps.length > 0) {
+                    // Helper function to ensure we get a valid applicant name
+                    var getApplicantName_1 = function (app) {
+                        return ((app.firstName || '') + " " + (app.lastName || '')).trim() || 'Unknown';
+                    };
+                    // Helper function to get the right date field and format it
+                    var getFormattedDate_1 = function (app) {
+                        try {
+                            var dateStr = app.submittedAt || app.createdAt;
+                            if (!dateStr)
+                                return 'N/A';
+                            var date = new Date(dateStr);
+                            if (isNaN(date.getTime()))
+                                return 'N/A';
+                            return date.toLocaleDateString('en-US', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric'
+                            });
+                        }
+                        catch (e) {
+                            return 'N/A';
+                        }
+                    };
                     var appData = jobApps.map(function (app) { return [
-                        app.applicantName,
-                        app.status,
-                        new Date(app.createdAt).toLocaleDateString('en-US', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric'
-                        }),
+                        getApplicantName_1(app),
+                        app.status || 'submitted',
+                        getFormattedDate_1(app),
                         app.email || "Not provided",
                         app.phone || "Not provided"
                     ]; });
