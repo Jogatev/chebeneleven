@@ -4,7 +4,7 @@ exports.db = exports.DB_CONNECTION_STRING = void 0;
 var postgres_js_1 = require("drizzle-orm/postgres-js");
 var postgres_1 = require("postgres");
 // Use the connection string directly here
-exports.DB_CONNECTION_STRING = process.env.DB_CONNECTION_STRING || 'postgresql://neondb_owner:npg_eFrPutD1n9dE@ep-aged-darkness-a1bh7bgl-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require';
+exports.DB_CONNECTION_STRING = process.env.DB_CONNECTION_STRING || 'postgresql://neondb_owner:npg_eFrPutD1n9dE@ep-winter-sound-a10r435a-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require';
 // Create a PostgreSQL client
 var queryClient = postgres_1["default"](exports.DB_CONNECTION_STRING, {
     ssl: 'require',
