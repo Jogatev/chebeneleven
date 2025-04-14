@@ -81,11 +81,11 @@ export default function ReportActions({
   };
 
   // Format date if it's a valid date string
-  const formatDate = (dateStr: string | Date | undefined) => {
+  const formatDate = (dateStr: string) => {
     try {
-      if (!dateStr) return 'N/A';
+      if (!dateStr) return '';
       const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return 'N/A';
+      if (isNaN(date.getTime())) return dateStr;
       return date.toLocaleString('en-US', {
         year: 'numeric',
         month: 'short',
@@ -95,7 +95,7 @@ export default function ReportActions({
         hour12: true
       });
     } catch (e) {
-      return 'N/A';
+      return dateStr;
     }
   };
 
@@ -325,55 +325,35 @@ export default function ReportActions({
         
         currentY += 25;
         
-    // If the job has applications, list them
-if (jobApps.length > 0) {
-  // Helper function to ensure we get a valid applicant name
-  const getApplicantName = (app: Application) => {
-    return `${app.firstName || ''} ${app.lastName || ''}`.trim() || 'Unknown';
-  };
-  
-  // Helper function to get the right date field and format it
-  const getFormattedDate = (app: Application) => {
-    try {
-      const dateStr = app.submittedAt || app.createdAt;
-      if (!dateStr) return 'N/A';
-      
-      const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return 'N/A';
-      
-      return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      });
-    } catch (e) {
-      return 'N/A';
-    }
-  };
-  
-  const appData = jobApps.map(app => [
-    getApplicantName(app),
-    app.status || 'submitted',
-    getFormattedDate(app),
-    app.email || "Not provided",
-    app.phone || "Not provided"
-  ]);
-  
-  autoTable(doc, {
-    head: [["Applicant", "Status", "Applied Date", "Email", "Phone"]],
-    body: appData,
-    startY: currentY,
-    styles: { fontSize: 9, cellPadding: 4, lineWidth: 0.1 },
-    headStyles: { fillColor: [255, 122, 0], textColor: [255, 255, 255], fontStyle: 'bold' },
-    alternateRowStyles: { fillColor: [255, 245, 235] },
-    bodyStyles: { textColor: [50, 50, 50] }
-  });
-  
-  currentY = doc.lastAutoTable?.finalY || currentY + 50;
-} else {
-  doc.text("No applications for this position", 14, currentY);
-  currentY += 15;
-}
+        // If the job has applications, list them
+        if (jobApps.length > 0) {
+          const appData = jobApps.map(app => [
+            app.applicantName,
+            app.status,
+            new Date(app.createdAt).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric'
+            }),
+            app.email || "Not provided",
+            app.phone || "Not provided"
+          ]);
+          
+          autoTable(doc, {
+            head: [["Applicant", "Status", "Applied Date", "Email", "Phone"]],
+            body: appData,
+            startY: currentY,
+            styles: { fontSize: 9, cellPadding: 4, lineWidth: 0.1 },
+            headStyles: { fillColor: [255, 122, 0], textColor: [255, 255, 255], fontStyle: 'bold' },
+            alternateRowStyles: { fillColor: [255, 245, 235] },
+            bodyStyles: { textColor: [50, 50, 50] }
+          });
+          
+          currentY = doc.lastAutoTable?.finalY || currentY + 50;
+        } else {
+          doc.text("No applications for this position", 14, currentY);
+          currentY += 15;
+        }
         
         // Add a divider
         doc.setDrawColor(220, 220, 220);
