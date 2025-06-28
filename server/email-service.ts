@@ -1,11 +1,22 @@
-
 import { Resend } from 'resend';
+import { config } from './config';
 
-const resend = new Resend(process.env.RESEND_API_KEY || 're_LPWxpWuw_BwiFm1syhyR6dx5x21h1Lh5b');
+const resend = new Resend(config.email.apiKey);
 
-const SENDER_EMAIL = 'careers@cheebeeneeleebeen.online'; 
+const SENDER_EMAIL = config.email.fromEmail;
 
-export async function sendApplicationConfirmation(application, job, referenceId) {
+interface Application {
+  firstName: string;
+  lastName: string;
+  email: string;
+}
+
+interface Job {
+  title: string;
+  location: string;
+}
+
+export async function sendApplicationConfirmation(application: Application, job: Job, referenceId: string) {
   try {
     const applicantName = `${application.firstName} ${application.lastName}`;
     
@@ -76,16 +87,16 @@ export async function sendApplicationConfirmation(application, job, referenceId)
     console.error("Error sending application confirmation email:", error);
     return {
       success: false,
-      error: error.message,
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
 
-export async function sendStatusUpdateEmail(application, job, status, referenceId) {
+export async function sendStatusUpdateEmail(application: Application, job: Job, status: string, referenceId: string) {
   try {
     const applicantName = `${application.firstName} ${application.lastName}`;
     
-    const statusMap = {
+    const statusMap: Record<string, string> = {
       submitted: "Submitted",
       under_review: "Under Review",
       interview: "Selected for Interview",
@@ -178,12 +189,12 @@ export async function sendStatusUpdateEmail(application, job, status, referenceI
     console.error("Error sending status update email:", error);
     return {
       success: false,
-      error: error.message,
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }
 
-export async function sendTestEmail(to) {
+export async function sendTestEmail(to: string) {
   try {
     const { data, error } = await resend.emails.send({
       from: SENDER_EMAIL,
@@ -198,6 +209,9 @@ export async function sendTestEmail(to) {
     
     return { success: true, messageId: data?.id };
   } catch (error) {
-    return { success: false, error: error.message };
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
   }
 }

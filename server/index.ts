@@ -4,18 +4,19 @@ import { createServer, type Server } from "http";
 import { registerRoutes } from "./routes";
 import { setupSession } from "./session";
 import { setupFileUpload } from "./file-upload";
-import { config } from "./config";
+import { config, validateConfig } from "./config";
 import postgres from 'postgres';
-import { drizzle } from 'drizzle-orm/postgres-js';
+import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { users, jobListings, applications, activities } from '@shared/schema';
 import { storage, setDatabaseConnection, setSessionStore } from './unified-storage';
 import createMemoryStore from "memorystore";
 import session from "express-session";
+import { Pool } from 'pg';
 
 export const DB_TYPE = process.env.DB_TYPE || 'memory';
 
-export const DB_CONNECTION_STRING = process.env.DB_CONNECTION_STRING || 'postgresql://neondb_owner:npg_eFrPutD1n9dE@ep-aged-darkness-a1bh7bgl-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require';
+export const DB_CONNECTION_STRING = config.database.connectionString;
 
 declare global {
   namespace Express {
@@ -36,18 +37,15 @@ export async function createApp(): Promise<{ app: Express; server: Server }> {
   let drizzleDb: any = null;
 
   if (DB_TYPE === 'postgres') {
-    const sql = postgres(DB_CONNECTION_STRING, {
-      ssl: 'require',
-      max: 10,
-      idle_timeout: 20,
-      connect_timeout: 30,
+    const pool = new Pool({
+      connectionString: DB_CONNECTION_STRING,
     });
 
     try {
-      await sql`SELECT 1`;
+      await pool.connect();
       console.log('PostgreSQL connection successful');
 
-      await sql`
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS users (
           id SERIAL PRIMARY KEY,
           username TEXT NOT NULL UNIQUE,
@@ -57,9 +55,9 @@ export async function createApp(): Promise<{ app: Express; server: Server }> {
           location TEXT NOT NULL,
           created_at TIMESTAMP DEFAULT NOW() NOT NULL
         )
-      `;
+      `);
 
-      await sql`
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS job_listings (
           id SERIAL PRIMARY KEY,
           user_id INTEGER NOT NULL,
@@ -76,9 +74,9 @@ export async function createApp(): Promise<{ app: Express; server: Server }> {
           closing_date TIMESTAMP,
           tags JSONB DEFAULT '[]'::jsonb
         )
-      `;
+      `);
 
-      await sql`
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS applications (
           id SERIAL PRIMARY KEY,
           job_id INTEGER NOT NULL,
@@ -100,9 +98,9 @@ export async function createApp(): Promise<{ app: Express; server: Server }> {
           status TEXT NOT NULL DEFAULT 'submitted',
           submitted_at TIMESTAMP DEFAULT NOW() NOT NULL
         )
-      `;
+      `);
 
-      await sql`
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS activities (
           id SERIAL PRIMARY KEY,
           user_id INTEGER NOT NULL,
@@ -112,10 +110,10 @@ export async function createApp(): Promise<{ app: Express; server: Server }> {
           details JSONB DEFAULT '{}'::jsonb,
           timestamp TIMESTAMP DEFAULT NOW() NOT NULL
         )
-      `;
+      `);
 
-      drizzleDb = drizzle(sql);
-      db = { pool: sql, drizzle: drizzleDb };
+      drizzleDb = drizzle(pool);
+      db = { pool, drizzle: drizzleDb };
       setDatabaseConnection(db);
 
       const sessionConfig = {
@@ -135,7 +133,7 @@ export async function createApp(): Promise<{ app: Express; server: Server }> {
       };
 
       setSessionStore(sessionConfig.store);
-      app.use(session(sessionConfig));
+      await setupSession(app, { pool });
     } catch (error) {
       console.error('PostgreSQL connection failed:', error);
       console.log('Falling back to memory storage');
@@ -156,7 +154,7 @@ export async function createApp(): Promise<{ app: Express; server: Server }> {
       };
 
       setSessionStore(sessionConfig.store);
-      app.use(session(sessionConfig));
+      await setupSession(app, { pool: null });
     }
   } else {
     const MemStore = createMemoryStore(session);
@@ -175,7 +173,7 @@ export async function createApp(): Promise<{ app: Express; server: Server }> {
     };
 
     setSessionStore(sessionConfig.store);
-    app.use(session(sessionConfig));
+    await setupSession(app, { pool: null });
   }
 
   app.use(cors(config.cors));
@@ -206,19 +204,6 @@ export async function createApp(): Promise<{ app: Express; server: Server }> {
   });
 
   app.use((req, res, next) => {
-    const originalSend = res.send;
-    res.send = function(data) {
-      if (typeof data === 'string' && data.startsWith('<!DOCTYPE')) {
-        console.log('Sending HTML response');
-      } else {
-        console.log('Sending JSON response');
-      }
-      return originalSend.call(this, data);
-    };
-    next();
-  });
-
-  app.use((req, res, next) => {
     req.db = db;
     req.drizzle = drizzleDb;
     next();
@@ -231,7 +216,13 @@ export async function createApp(): Promise<{ app: Express; server: Server }> {
 
   setupFileUpload(app);
 
-  const server = await registerRoutes(app);
+  app.use(config.api.basePath, await registerRoutes(app));
+
+  app.get('/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+
+  const server = await createServer(app);
 
   server.on('error', (error) => {
     console.error('Server error:', error);

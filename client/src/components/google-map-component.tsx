@@ -60,7 +60,7 @@ export default function GoogleMapComponent({
     const initMap = async () => {
       setIsLoadingMap(true);
       const loader = new Loader({
-        apiKey: 'AIzaSyCAv797FUnDJyX0kULmzwaFdjEdYeYkksM',
+        apiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
         version: "weekly",
         libraries: ["places"], // Add places library for search functionality
       });
