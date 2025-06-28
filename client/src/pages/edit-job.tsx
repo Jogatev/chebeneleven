@@ -328,40 +328,49 @@ export default function EditJobPage() {
                     )}
                   />
 
-                  <FormField
-                    control={form.control}
-                    name="payRange"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Pay Range (₱)</FormLabel>
-                        <div className="flex items-center">
-                          <span className="mr-2 text-gray-500">₱</span>
-                          <div className="flex items-center flex-1">
-                            <Input
-                              type="number"
-                              placeholder="Min"
-                              min="0"
-                              value={minSalary}
-                              onChange={(e) => setMinSalary(e.target.value)}
-                              className="rounded-r-none"
-                            />
-                            <span className="px-2 py-2 border-t border-b">-</span>
-                            <Input
-                              type="number"
-                              placeholder="Max"
-                              min="0"
-                              value={maxSalary}
-                              onChange={(e) => setMaxSalary(e.target.value)}
-                              className="rounded-l-none"
-                            />
-                          </div>
-                        </div>
-                        <FormDescription className="text-xs text-gray-500 mt-1">
-                          Monthly salary in Philippine Peso
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+<FormField
+  control={form.control}
+  name="payRange"
+  render={({ field }) => (
+    <FormItem>
+      <FormLabel>Pay Range (₱)</FormLabel>
+      <div className="flex items-center">
+        <span className="mr-2 text-gray-500">₱</span>
+        <div className="flex items-center flex-1">
+          <Input
+            inputMode="numeric"
+            pattern="[0-9]*"
+            placeholder="Min"
+            value={minSalary}
+            onChange={(e) => {
+              // Strip any non-digit characters from the input
+              const numericValue = e.target.value.replace(/[^0-9]/g, '');
+              setMinSalary(numericValue);
+            }}
+            className="rounded-r-none"
+          />
+          <span className="px-2 py-2 border-t border-b">-</span>
+          <Input
+            inputMode="numeric"
+            pattern="[0-9]*"
+            placeholder="Max"
+            value={maxSalary}
+            onChange={(e) => {
+              // Strip any non-digit characters from the input
+              const numericValue = e.target.value.replace(/[^0-9]/g, '');
+              setMaxSalary(numericValue);
+            }}
+            className="rounded-l-none"
+          />
+        </div>
+      </div>
+      <FormDescription className="text-xs text-gray-500 mt-1">
+        Monthly salary in Philippine Peso
+      </FormDescription>
+      <FormMessage />
+    </FormItem>
+  )}
+
                   />
                 </div>
 

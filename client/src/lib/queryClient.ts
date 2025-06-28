@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { API_ENDPOINTS, getFullApiPath } from "@shared/api-endpoints";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -22,6 +23,15 @@ export async function apiRequest(
   await throwIfResNotOk(res);
   return res;
 }
+
+export const createApiRequest = (endpoint: string) => {
+  return {
+    get: (data?: unknown) => apiRequest("GET", getFullApiPath(endpoint), data),
+    post: (data?: unknown) => apiRequest("POST", getFullApiPath(endpoint), data),
+    patch: (data?: unknown) => apiRequest("PATCH", getFullApiPath(endpoint), data),
+    delete: (data?: unknown) => apiRequest("DELETE", getFullApiPath(endpoint), data),
+  };
+};
 
 type UnauthorizedBehavior = "returnNull" | "throw";
 export const getQueryFn: <T>(options: {

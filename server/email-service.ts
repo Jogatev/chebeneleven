@@ -1,235 +1,217 @@
-import * as SibApiV3Sdk from '@getbrevo/brevo';
-import { Application, JobListing } from '@shared/schema';
-import { log } from './vite';
+import { Resend } from 'resend';
+import { config } from './config';
 
-// Configure API client
-const emailInstance = new SibApiV3Sdk.TransactionalEmailsApi();
-const smsInstance = new SibApiV3Sdk.TransactionalSMSApi();
-const apiKey = "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";
+const resend = new Resend(config.email.apiKey);
 
-emailInstance.setApiKey(SibApiV3Sdk.TransactionalEmailsApiApiKeys.apiKey, apiKey);
-smsInstance.setApiKey(SibApiV3Sdk.TransactionalSMSApiApiKeys.apiKey, apiKey);
+const SENDER_EMAIL = config.email.fromEmail;
 
-async function sendSMS(phone: string, message: string) {
+interface Application {
+  firstName: string;
+  lastName: string;
+  email: string;
+}
+
+interface Job {
+  title: string;
+  location: string;
+}
+
+export async function sendApplicationConfirmation(application: Application, job: Job, referenceId: string) {
   try {
-    // Format phone number (remove non-digits and ensure +63 prefix)
-    const formattedPhone = '+63' + phone.replace(/\D/g, '');
+    const applicantName = `${application.firstName} ${application.lastName}`;
     
-    // Use TextBelt API (1 free SMS per day)
-    const response = await fetch('https://textbelt.com/text', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        phone: formattedPhone,
-        message: message,
-        key: 'textbelt_test', // Free test key (1 SMS/day)
-      }),
+    const subject = `Your Application for ${job.title} at 7-Eleven has been received`;
+    
+    
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ccc; border-radius: 8px;">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <div style="font-size: 24px; font-weight: bold;">
+            <span style="color: #008c48;">7-ELEVEN</span>
+            <span style="color: #ff7a00; margin-left: 5px;">PHILIPPINES</span>
+          </div>
+        </div>
+        
+        <h2 style="color: #333; text-align: center;">Application Confirmation</h2>
+        
+        <p>Dear ${applicantName},</p>
+        
+        <p>Thank you for applying to the <strong>${job.title}</strong> position at 7-Eleven ${job.location}. We have received your application and our team will review it shortly.</p>
+        
+        <div style="background-color: #f9f9f9; border-left: 4px solid #008c48; padding: 15px; margin: 20px 0;">
+          <p style="margin: 0;"><strong>Application Reference ID:</strong> ${referenceId}</p>
+          <p style="margin: 10px 0 0;"><strong>Position:</strong> ${job.title}</p>
+          <p style="margin: 10px 0 0;"><strong>Location:</strong> ${job.location}</p>
+          <p style="margin: 10px 0 0;"><strong>Date Applied:</strong> ${new Date().toLocaleDateString()}</p>
+        </div>
+        
+        <p>What happens next?</p>
+        <ol>
+          <li>Our hiring team will review your application</li>
+          <li>If your qualifications match our requirements, we'll contact you for an interview</li>
+          <li>You will receive updates on your application status via email</li>
+        </ol>
+        
+        <p>Please save your application reference ID for future correspondence.</p>
+        
+        <p>If you have any questions about your application, please contact our HR department.</p>
+        
+        <p>Best regards,<br>
+        7-Eleven Philippines Recruitment Team</p>
+        
+        <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #777; font-size: 12px;">
+          <p>This is an automated message. Please do not reply to this email.</p>
+        </div>
+      </div>
+    `;
+    
+    const { data, error } = await resend.emails.send({
+      from: SENDER_EMAIL,
+      to: application.email,
+      subject: subject,
+      html: htmlBody,
     });
 
-    const data = await response.json();
-    return { 
-      success: data.success,
-      messageId: data.textId,
-      error: data.error
-    };
-  } catch (error) {
-    console.error('Failed to send SMS:', error);
-    return { success: false, error };
-  }
-}
-
-export async function sendApplicationConfirmation(
-  application: Application, 
-  job: JobListing,
-  referenceId: string
-) {
-  try {
-    // Send SMS first
-    if (application.phone) {
-      const smsMessage = `Thank you for applying to ${job.title} at 7-Eleven ${job.location}. Your reference number is ${referenceId}. We will contact you soon.`;
-      await sendSMS(application.phone, smsMessage);
+    if (error) {
+      console.error("Resend API error:", error);
+      throw new Error(`Email sending failed: ${error.message}`);
     }
-
-    // Send email as backup
-    const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
-
-    sendSmtpEmail.subject = `Application Confirmation: ${job.title} [Ref# ${referenceId}]`;
-    sendSmtpEmail.htmlContent = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <div style="background-color: #00703c; padding: 20px; text-align: center;">
-            <h1 style="color: white; margin: 0;">7-Eleven Philippines</h1>
-          </div>
-
-          <div style="padding: 20px; border: 1px solid #ddd; border-top: none;">
-            <h2>Thank you for your application</h2>
-            <p>Dear ${application.firstName} ${application.lastName},</p>
-            <p>We have received your application for the <strong>${job.title}</strong> position at our ${job.location} store.</p>
-
-            <div style="background-color: #f9f9f9; padding: 15px; margin: 20px 0; border-left: 4px solid #00703c;">
-              <p><strong>Your application reference number:</strong> ${referenceId}</p>
-              <p><strong>Position:</strong> ${job.title}</p>
-              <p><strong>Location:</strong> ${job.location}</p>
-              <p><strong>Date applied:</strong> ${new Date(application.submittedAt).toLocaleDateString('en-PH')}</p>
-            </div>
-
-            <p>To cancel your application, please click the link below:</p>
-            <a href="https://7eleven.ph/careers/cancel/${referenceId}" style="color: #d32f2f;">Cancel Application</a>
-
-            <p>If you have any questions, please contact our recruitment team.</p>
-
-            <p>Best regards,<br>7-Eleven Philippines Recruitment Team</p>
-          </div>
-        </div>
-      `;
-    sendSmtpEmail.sender = { name: '7-Eleven Careers', email: '893af0001@smtp-brevo.com' };
-    sendSmtpEmail.to = [{ email: application.email }];
-    sendSmtpEmail.headers = {
-      'X-Mailin-custom': 'custom_header_1:custom_value_1|custom_header_2:custom_value_2'
+    
+    console.log("Email sent successfully, ID:", data?.id);
+    
+    return {
+      success: true,
+      messageId: data?.id || 'unknown',
     };
-
-    const result = await emailInstance.sendTransacEmail(sendSmtpEmail); //Corrected apiInstance to emailInstance
-    log(`Application confirmation email sent: ${result.messageId}`, 'email-service');
-    return { success: true, messageId: result.messageId };
   } catch (error) {
-    console.error('Failed to send application confirmation email:', error);
-    log('Failed to send application confirmation email', 'email-service');
-    return { success: false, error };
+    console.error("Error sending application confirmation email:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
   }
 }
 
-export async function sendStatusUpdateEmail(
-  application: Application, 
-  job: JobListing,
-  referenceId: string,
-  newStatus: string
-) {
+export async function sendStatusUpdateEmail(application: Application, job: Job, status: string, referenceId: string) {
   try {
-    const formattedStatus = newStatus
-      .replace(/_/g, ' ')
-      .split(' ')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
-
-    const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
-
-    sendSmtpEmail.subject = `Application Status Update: ${job.title} [Ref# ${referenceId}]`;
-    sendSmtpEmail.htmlContent = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <div style="background-color: #00703c; padding: 20px; text-align: center;">
-            <h1 style="color: white; margin: 0;">7-Eleven Philippines</h1>
-          </div>
-
-          <div style="padding: 20px; border: 1px solid #ddd; border-top: none;">
-            <h2>Application Status Update</h2>
-            <p>Dear ${application.firstName} ${application.lastName},</p>
-
-            <div style="background-color: #f9f9f9; padding: 15px; margin: 20px 0; border-left: 4px solid #00703c;">
-              <p><strong>Your application reference number:</strong> ${referenceId}</p>
-              <p><strong>Position:</strong> ${job.title}</p>
-              <p><strong>Location:</strong> ${job.location}</p>
-              <p><strong>New status:</strong> <span style="color: #00703c; font-weight: bold;">${formattedStatus}</span></p>
-            </div>
-
-            <p>Status Update: ${getStatusMessage(newStatus)}</p>
-            <p>${getActionRequired(newStatus)}</p>
-
-            <p>Best regards,<br>7-Eleven Philippines Recruitment Team</p>
+    const applicantName = `${application.firstName} ${application.lastName}`;
+    
+    const statusMap: Record<string, string> = {
+      submitted: "Submitted",
+      under_review: "Under Review",
+      interview: "Selected for Interview",
+      interviewed: "Interviewed",
+      accepted: "Accepted",
+      rejected: "Not Selected"
+    };
+    
+    const statusText = statusMap[status] || status;
+    
+    const subject = `Your 7-Eleven Job Application Status: ${statusText}`;
+    
+    let statusMessage = "";
+    let nextSteps = "";
+    
+    if (status === "under_review") {
+      statusMessage = "Your application is currently under review by our hiring team.";
+      nextSteps = "If your qualifications match our requirements, we will contact you for an interview.";
+    } else if (status === "interview") {
+      statusMessage = "Congratulations! Your application has been selected for an interview.";
+      nextSteps = "Our HR team will contact you shortly to schedule an interview.";
+    } else if (status === "interviewed") {
+      statusMessage = "Thank you for attending the interview for this position.";
+      nextSteps = "Our team is currently evaluating all candidates and we will inform you of our decision soon.";
+    } else if (status === "accepted") {
+      statusMessage = "Congratulations! We are pleased to inform you that your application has been accepted.";
+      nextSteps = "Our HR team will contact you shortly with more details about the next steps.";
+    } else if (status === "rejected") {
+      statusMessage = "Thank you for your interest in the position. After careful consideration, we have decided to proceed with other candidates whose qualifications more closely match our current needs.";
+      nextSteps = "We encourage you to apply for future positions that match your skills and experience.";
+    } else {
+      statusMessage = `Your application status has been updated to: ${statusText}`;
+      nextSteps = "Please continue to monitor your email for further updates.";
+    }
+    
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ccc; border-radius: 8px;">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <div style="font-size: 24px; font-weight: bold;">
+            <span style="color: #008c48;">7-ELEVEN</span>
+            <span style="color: #ff7a00; margin-left: 5px;">PHILIPPINES</span>
           </div>
         </div>
-      `;
-    sendSmtpEmail.sender = { name: '7-Eleven Careers', email: '893af0001@smtp-brevo.com' };
-    sendSmtpEmail.to = [{ email: application.email }];
-    sendSmtpEmail.headers = {
-      'X-Mailin-custom': 'custom_header_1:custom_value_1|custom_header_2:custom_value_2'
-    };
+        
+        <h2 style="color: #333; text-align: center;">Application Status Update</h2>
+        
+        <p>Dear ${applicantName},</p>
+        
+        <p>${statusMessage}</p>
+        
+        <div style="background-color: #f9f9f9; border-left: 4px solid #008c48; padding: 15px; margin: 20px 0;">
+          <p style="margin: 0;"><strong>Application Reference ID:</strong> ${referenceId}</p>
+          <p style="margin: 10px 0 0;"><strong>Position:</strong> ${job.title}</p>
+          <p style="margin: 10px 0 0;"><strong>Location:</strong> ${job.location}</p>
+          <p style="margin: 10px 0 0;"><strong>Current Status:</strong> ${statusText}</p>
+        </div>
+        
+        <p>${nextSteps}</p>
+        
+        <p>If you have any questions, please contact our HR department and reference your Application ID.</p>
+        
+        <p>Best regards,<br>
+        7-Eleven Philippines Recruitment Team</p>
+        
+        <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #777; font-size: 12px;">
+          <p>This is an automated message. Please do not reply to this email.</p>
+        </div>
+      </div>
+    `;
+    
+    const { data, error } = await resend.emails.send({
+      from: SENDER_EMAIL,
+      to: application.email,
+      subject: subject,
+      html: htmlBody,
+    });
 
-    const result = await emailInstance.sendTransacEmail(sendSmtpEmail); //Corrected apiInstance to emailInstance
-    log(`Status update email sent: ${result.messageId}`, 'email-service');
-    return { success: true, messageId: result.messageId };
+    if (error) {
+      console.error("Resend API error:", error);
+      throw new Error(`Email sending failed: ${error.message}`);
+    }
+    
+    console.log("Status update email sent successfully, ID:", data?.id);
+    
+    return {
+      success: true,
+      messageId: data?.id || 'unknown',
+    };
   } catch (error) {
-    console.error('Failed to send status update email:', error);
-    log('Failed to send status update email', 'email-service');
-    return { success: false, error };
+    console.error("Error sending status update email:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
   }
 }
 
-export async function sendFranchiseeNotification(
-  application: Application,
-  job: JobListing,
-  referenceId: string,
-  franchiseeEmail: string
-) {
+export async function sendTestEmail(to: string) {
   try {
-    const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
+    const { data, error } = await resend.emails.send({
+      from: SENDER_EMAIL,
+      to: to,
+      subject: 'Test Email from 7-Eleven Application System',
+      html: '<p>This is a test email from the 7-Eleven application system.</p><p>If you received this, email sending is working correctly!</p>',
+    });
 
-    sendSmtpEmail.subject = `New Job Application: ${job.title}`;
-    sendSmtpEmail.htmlContent = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <div style="background-color: #00703c; padding: 20px; text-align: center;">
-            <h1 style="color: white; margin: 0;">7-Eleven Philippines</h1>
-          </div>
-
-          <div style="padding: 20px; border: 1px solid #ddd; border-top: none;">
-            <h2>New Job Application Received</h2>
-            <p>A new application has been submitted for your job listing.</p>
-
-            <div style="background-color: #f9f9f9; padding: 15px; margin: 20px 0; border-left: 4px solid #00703c;">
-              <p><strong>Application reference number:</strong> ${referenceId}</p>
-              <p><strong>Position:</strong> ${job.title}</p>
-              <p><strong>Location:</strong> ${job.location}</p>
-              <p><strong>Applicant:</strong> ${application.firstName} ${application.lastName}</p>
-              <p><strong>Email:</strong> ${application.email}</p>
-              <p><strong>Date applied:</strong> ${new Date(application.submittedAt).toLocaleDateString('en-PH')}</p>
-            </div>
-
-            <p>Please review the application and update the status as needed.</p>
-
-            <p>Best regards,<br>7-Eleven Philippines Recruitment Team</p>
-          </div>
-        </div>
-      `;
-    sendSmtpEmail.sender = { name: '7-Eleven Careers', email: '893af0001@smtp-brevo.com' };
-    sendSmtpEmail.to = [{ email: franchiseeEmail }];
-    sendSmtpEmail.headers = {
-      'X-Mailin-custom': 'custom_header_1:custom_value_1|custom_header_2:custom_value_2'
-    };
-
-    const result = await emailInstance.sendTransacEmail(sendSmtpEmail); //Corrected apiInstance to emailInstance
-    log(`Franchisee notification email sent: ${result.messageId}`, 'email-service');
-    return { success: true, messageId: result.messageId };
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    
+    return { success: true, messageId: data?.id };
   } catch (error) {
-    console.error('Failed to send franchisee notification email:', error);
-    log('Failed to send franchisee notification email', 'email-service');
-    return { success: false, error };
-  }
-}
-
-function getStatusMessage(status: string): string {
-  switch(status) {
-    case 'under_review':
-      return 'Your application is currently under review by our recruitment team.';
-    case 'interviewed':
-      return 'Thank you for completing your interview with us.';
-    case 'accepted':
-      return 'Congratulations! We are pleased to offer you the position.';
-    case 'rejected':
-      return 'After careful consideration, we have decided to pursue other candidates for this position.';
-    default:
-      return `Your application status has been updated to "${status}".`;
-  }
-}
-
-function getActionRequired(status: string): string {
-  switch(status) {
-    case 'under_review':
-      return 'We will contact you soon with updates on your application.';
-    case 'interviewed':
-      return 'Our team is evaluating your interview performance and will be in touch soon.';
-    case 'accepted':
-      return 'Please respond to our offer within the next 3 business days. A 7-Eleven representative will contact you with next steps.';
-    case 'rejected':
-      return 'We appreciate your interest in 7-Eleven and encourage you to apply for future openings.';
-    default:
-      return 'Please log in to your account for more details.';
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    };
   }
 }

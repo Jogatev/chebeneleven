@@ -1,5 +1,3 @@
-// Predefined job description templates for 7-Eleven roles
-
 export const jobResponsibilities = [
   {
     id: "r1",
@@ -124,4 +122,4 @@ export const jobRequirements = [
     title: "Time Management",
     content: "Good time management skills and ability to prioritize tasks."
   }
-];
+]; 
