@@ -1,35 +1,22 @@
 import { useState, useRef, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useAuth } from "@/hooks/use-auth";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format } from "date-fns";
+import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import ReportActions from "@/components/report-actions";
+import { apiRequest } from "@/lib/utils";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import ActivityCard from "@/components/activity-card";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage
-} from "@/components/ui/form";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox"; // Added import for Checkbox
+import { Checkbox } from "@/components/ui/checkbox";
 import Header from "@/components/header";
 import { JobListing, Application } from "@shared/schema";
 import { Loader2, Search, X, LineChart } from "lucide-react";
@@ -37,7 +24,6 @@ import StoreLocationAutocomplete from "@/components/store-location-autocomplete"
 import JobTemplateSelector from "@/components/job-template-selector";
 import DashboardCharts from "@/components/dashboard-charts";
 
-// Job creation schema
 const createJobSchema = z.object({
   title: z.string().min(3, "Job title is required"),
   location: z.string().min(3, "Location is required"),
@@ -63,9 +49,9 @@ export default function FranchiseeDashboard() {
   const [jobSortOrder, setJobSortOrder] = useState<"newest" | "oldest" | "applications">("newest");
   const [showCharts, setShowCharts] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const [selectedJobFilter, setSelectedJobFilter] = useState("all"); // Added state for job filter
-  const [applicationStatusFilter, setApplicationStatusFilter] = useState("all"); // Added state for application status filter
-  const [workAvailabilityFilter, setWorkAvailabilityFilter] = useState({ // Added state for work availability filter
+  const [selectedJobFilter, setSelectedJobFilter] = useState("all");
+  const [applicationStatusFilter, setApplicationStatusFilter] = useState("all");
+  const [workAvailabilityFilter, setWorkAvailabilityFilter] = useState({
     holidayWork: false,
     weekdayWork: false,
     weekendWork: false,
@@ -74,16 +60,12 @@ export default function FranchiseeDashboard() {
     nightShift: false,
   });
 
-
-  // Queries for job listings
-  // Add this with your other queries
 const {
   data: activities,
   isLoading: isActivitiesLoading,
   error: activitiesError
 } = useQuery({
   queryKey: ["/api/my-activities"],
-  // Only fetch when the activities tab is active
   enabled: activeTab === "activities",
 });
 
@@ -95,7 +77,6 @@ const {
     queryKey: ["/api/my-jobs"],
   });
 
-  // Query for applications
   const {
     data: applications,
     isLoading: isApplicationsLoading,
@@ -104,7 +85,6 @@ const {
     queryKey: ["/api/my-applications"],
   });
 
-  // Job creation form
   const jobForm = useForm<CreateJobFormValues>({
     resolver: zodResolver(createJobSchema),
     defaultValues: {
@@ -121,7 +101,6 @@ const {
     },
   });
 
-  // Create job mutation
   const createJobMutation = useMutation({
     mutationFn: async (jobData: any) => {
       const res = await apiRequest("POST", "/api/jobs", jobData);
@@ -145,7 +124,6 @@ const {
     },
   });
 
-  // Update job status mutation
   const updateJobMutation = useMutation({
     mutationFn: async ({ id, status }: { id: number; status: string }) => {
       const res = await apiRequest("PATCH", `/api/jobs/${id}`, { status });
@@ -172,18 +150,14 @@ const {
 
   
 
-  // Auto-show charts when data is loaded
   useEffect(() => {
     if (jobs?.length && applications?.length && !isJobsLoading && !isApplicationsLoading) {
       setShowCharts(true);
     }
   }, [jobs, applications, isJobsLoading, isApplicationsLoading]);
 
-  // Submit job form
   const onSubmitJobForm = (data: CreateJobFormValues) => {
-    // Convert date string to ISO format for consistent handling
     if (data.closingDate) {
-      // Send the date as a string in ISO format
       const formattedData = {
         ...data,
         closingDate: new Date(data.closingDate).toISOString()
@@ -194,9 +168,7 @@ const {
     }
   };
 
-  // Handle job status change with confirmation
   const handleJobStatusChange = (jobId: number, newStatus: string) => {
-    // Add confirmation for sensitive status changes
     if (newStatus === "closed") {
       if (window.confirm("Are you sure you want to close this job listing? It will no longer be visible to applicants.")) {
         updateJobMutation.mutate({ id: jobId, status: newStatus });
@@ -206,19 +178,15 @@ const {
     }
   };
 
-  // Handle logout
   const handleLogout = () => {
     logoutMutation.mutate();
   };
 
-  // Filter and sort jobs based on status, search query, and sort order
   const filteredJobs = jobs ? jobs.filter(job => {
-    // First filter by status
     if (jobStatusFilter !== "all" && job.status !== jobStatusFilter) {
       return false;
     }
 
-    // Then filter by search query if one exists
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       return (
@@ -229,29 +197,28 @@ const {
     }
 
     return true;
-  })
-    // Then sort the filtered jobs
-    .sort((a, b) => {
-      if (jobSortOrder === "newest") {
+  }) : [];
+
+  const sortedJobs = [...filteredJobs].sort((a, b) => {
+    switch (jobSortOrder) {
+      case "newest":
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      } else if (jobSortOrder === "oldest") {
+      case "oldest":
         return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-      } else if (jobSortOrder === "applications") {
-        const aCount = applications?.filter(app => app.jobId === a.id).length || 0;
-        const bCount = applications?.filter(app => app.jobId === b.id).length || 0;
-        return bCount - aCount;
-      }
-      return 0;
-    }) : [];
+      case "applications":
+        const aApplications = applications?.filter(app => app.jobId === a.id).length || 0;
+        const bApplications = applications?.filter(app => app.jobId === b.id).length || 0;
+        return bApplications - aApplications;
+      default:
+        return 0;
+    }
+  });
 
-
-
-  // Calculate dashboard stats
   const dashboardStats = {
-    activeJobListings: jobs?.filter(job => job.status === "active").length || 0,
-    positionsFilled: jobs?.filter(job => job.status === "filled").length || 0,
+    totalJobs: jobs?.length || 0,
+    activeJobs: jobs?.filter(job => job.status === "active").length || 0,
     totalApplications: applications?.length || 0,
-    acceptedApplicants: applications?.filter(app => app.status === "accepted").length || 0,
+    pendingApplications: applications?.filter(app => app.status === "submitted").length || 0,
   };
 
   return (
@@ -276,25 +243,19 @@ const {
               <div className="bg-blue-50 rounded-lg p-4 border border-blue-100 transition-all hover:shadow-md">
                 <h3 className="text-blue-800 font-medium text-sm mb-1">Active Job Listings</h3>
                 <p className="text-2xl font-bold text-blue-900">
-                  {isJobsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : dashboardStats.activeJobListings}
+                  {isJobsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : dashboardStats.activeJobs}
                 </p>
               </div>
               <div className="bg-purple-50 rounded-lg p-4 border border-purple-100 transition-all hover:shadow-md">
-                <h3 className="text-purple-800 font-medium text-sm mb-1">Positions Filled</h3>
+                <h3 className="text-purple-800 font-medium text-sm mb-1">Total Applications</h3>
                 <p className="text-2xl font-bold text-purple-900">
-                  {isJobsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : dashboardStats.positionsFilled}
-                </p>
-              </div>
-              <div className="bg-orange-50 rounded-lg p-4 border border-orange-100 transition-all hover:shadow-md">
-                <h3 className="text-orange-800 font-medium text-sm mb-1">Total Applications</h3>
-                <p className="text-2xl font-bold text-orange-900">
                   {isApplicationsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : dashboardStats.totalApplications}
                 </p>
               </div>
-              <div className="bg-green-50 rounded-lg p-4 border border-green-100 transition-all hover:shadow-md">
-                <h3 className="text-green-800 font-medium text-sm mb-1">Accepted Applicants</h3>
-                <p className="text-2xl font-bold text-green-900">
-                  {isApplicationsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : dashboardStats.acceptedApplicants}
+              <div className="bg-orange-50 rounded-lg p-4 border border-orange-100 transition-all hover:shadow-md">
+                <h3 className="text-orange-800 font-medium text-sm mb-1">Pending Applications</h3>
+                <p className="text-2xl font-bold text-orange-900">
+                  {isApplicationsLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : dashboardStats.pendingApplications}
                 </p>
               </div>
             </div>
@@ -435,7 +396,7 @@ const {
                     <div className="p-6 text-center">
                       <p className="text-red-500">Error loading job listings</p>
                     </div>
-                  ) : filteredJobs.length === 0 ? (
+                  ) : sortedJobs.length === 0 ? (
                     <div className="p-6 text-center">
                       {searchQuery ? (
                         <>
@@ -462,7 +423,7 @@ const {
                     </div>
                   ) : (
                     <>
-                      {filteredJobs.map((job) => (
+                      {sortedJobs.map((job) => (
                         <div
                           key={job.id}
                           className="p-6 hover:bg-neutral-100 transition-colors cursor-pointer"

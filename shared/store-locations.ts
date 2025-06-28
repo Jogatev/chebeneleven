@@ -1,4 +1,3 @@
-// Sample 7-Eleven store locations in the Philippines for autocomplete
 export const storeLocations = [
   {
     id: 1,
@@ -150,4 +149,4 @@ export const storeLocations = [
     fullAddress: "1246 Quezon Boulevard, Naga, Camarines Sur 4400",
     coordinates: { lat: 13.6294, lng: 123.1980 }
   }
-];
+]; 

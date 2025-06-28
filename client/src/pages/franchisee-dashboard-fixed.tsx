@@ -1,15 +1,31 @@
-import { useState, useRef } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useAuth } from "@/hooks/use-auth";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import ActivityCard from "@/components/activity-card";
 import { format } from "date-fns";
+import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/utils";
+import { getFullApiPath } from "@/lib/utils";
+import { API_ENDPOINTS } from "@shared/api-endpoints";
+import { JobListing, Application } from "@shared/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import Header from "@/components/header";
+import { Loader2, Search, X, LineChart, Plus, Filter, BarChart3, FileText, Users, Briefcase } from "lucide-react";
+import StoreLocationAutocomplete from "@/components/store-location-autocomplete";
+import JobTemplateSelector from "@/components/job-template-selector";
+import { ActivityCard as NewActivityCard } from "@/components/activity-card";
+import { DashboardCharts } from "@/components/dashboard-charts";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import ReportActions from "@/components/report-actions";
 import { 
   Form,
@@ -19,22 +35,8 @@ import {
   FormLabel,
   FormMessage 
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import Header from "@/components/header";
-import ApplicationCard from "@/components/application-card";
-import { JobListing, Application } from "@shared/schema";
-import { Loader2, Search, X } from "lucide-react";
+import { ApplicationCard as NewApplicationCard } from "@/components/application-card";
 
-// Job creation schema
 const createJobSchema = z.object({
   title: z.string().min(3, "Job title is required"),
   location: z.string().min(3, "Location is required"),
@@ -61,36 +63,31 @@ export default function FranchiseeDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Add this with your other queries
 const {
   data: activities,
   isLoading: isActivitiesLoading,
   error: activitiesError
 } = useQuery({
-  queryKey: ["/api/my-activities"],
-  // Only fetch when the activities tab is active
+  queryKey: [getFullApiPath(API_ENDPOINTS.ACTIVITIES.MY_ACTIVITIES)],
   enabled: activeTab === "activities",
 });
 
-  // Queries for job listings
   const { 
     data: jobs, 
     isLoading: isJobsLoading,
     error: jobsError
   } = useQuery<JobListing[]>({
-    queryKey: ["/api/my-jobs"],
+    queryKey: [getFullApiPath(API_ENDPOINTS.JOBS.MY_JOBS)],
   });
 
-  // Query for applications
   const {
     data: applications,
     isLoading: isApplicationsLoading,
     error: applicationsError
   } = useQuery<Application[]>({
-    queryKey: ["/api/my-applications"],
+    queryKey: [getFullApiPath(API_ENDPOINTS.APPLICATIONS.MY_APPLICATIONS)],
   });
 
-  // Job creation form
   const jobForm = useForm<CreateJobFormValues>({
     resolver: zodResolver(createJobSchema),
     defaultValues: {
@@ -107,10 +104,9 @@ const {
     },
   });
 
-  // Create job mutation
   const createJobMutation = useMutation({
     mutationFn: async (jobData: any) => {
-      const res = await apiRequest("POST", "/api/jobs", jobData);
+      const res = await apiRequest("POST", getFullApiPath(API_ENDPOINTS.JOBS.CREATE), jobData);
       return res.json();
     },
     onSuccess: () => {
@@ -119,7 +115,7 @@ const {
         description: "Your job listing has been successfully created",
       });
       jobForm.reset();
-      queryClient.invalidateQueries({ queryKey: ["/api/my-jobs"] });
+      queryClient.invalidateQueries({ queryKey: [getFullApiPath(API_ENDPOINTS.JOBS.MY_JOBS)] });
       setActiveTab("jobListings");
     },
     onError: (error) => {
@@ -131,15 +127,14 @@ const {
     },
   });
 
-  // Update job status mutation
   const updateJobMutation = useMutation({
     mutationFn: async ({ id, status }: { id: number; status: string }) => {
-      const res = await apiRequest("PATCH", `/api/jobs/${id}`, { status });
+      const res = await apiRequest("PATCH", getFullApiPath(API_ENDPOINTS.JOBS.UPDATE(id)), { status });
       return res.json();
       
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/my-jobs"] });
+      queryClient.invalidateQueries({ queryKey: [getFullApiPath(API_ENDPOINTS.JOBS.MY_JOBS)] });
       toast({
         title: "Job Updated",
         description: "The job status has been updated",
@@ -155,14 +150,13 @@ const {
     },
   });
 
-  // Update application status mutation
   const updateApplicationMutation = useMutation({
     mutationFn: async ({ id, status }: { id: number; status: string }) => {
-      const res = await apiRequest("PATCH", `/api/applications/${id}`, { status });
+      const res = await apiRequest("PATCH", getFullApiPath(API_ENDPOINTS.APPLICATIONS.UPDATE(id)), { status });
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/my-applications"] });
+      queryClient.invalidateQueries({ queryKey: [getFullApiPath(API_ENDPOINTS.APPLICATIONS.MY_APPLICATIONS)] });
       toast({
         title: "Application Updated",
         description: "The application status has been updated",
@@ -177,11 +171,8 @@ const {
     },
   });
 
-  // Submit job form
   const onSubmitJobForm = (data: CreateJobFormValues) => {
-    // Convert date string to ISO format for consistent handling
     if (data.closingDate) {
-      // Send the date as a string in ISO format
       const formattedData = {
         ...data,
         closingDate: new Date(data.closingDate).toISOString()
@@ -192,7 +183,6 @@ const {
     }
   };
 
-  // Handle job status change
   const handleJobStatusChange = (jobId: number, newStatus: string) => {if (newStatus === "archived") 
     if (window.confirm("Are you sure you want to archive this job listing? It will no longer be visible to applicants.")) {
     updateJobMutation.mutate({ id: jobId, status: newStatus });
@@ -202,24 +192,19 @@ const {
   }
 };
 
-  // Handle application status change
   const handleApplicationStatusChange = (applicationId: number, newStatus: string) => {
     updateApplicationMutation.mutate({ id: applicationId, status: newStatus });
   };
 
-  // Handle logout
   const handleLogout = () => {
     logoutMutation.mutate();
   };
 
-  // Filter jobs based on status and search query
   const filteredJobs = jobs ? jobs.filter(job => {
-    // First filter by status
     if (jobStatusFilter !== "all" && job.status !== jobStatusFilter) {
       return false;
     }
     
-    // Then filter by search query if one exists
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       return (
@@ -228,18 +213,16 @@ const {
         job.location.toLowerCase().includes(query)
       );
     }
-    
+
     return true;
   }) : [];
 
-  // Filter applications based on job and status
   const filteredApplications = applications ? applications.filter(app => {
     const matchesJob = selectedJobFilter === "all" || app.jobId === selectedJobFilter;
     const matchesStatus = applicationStatusFilter === "all" || app.status === applicationStatusFilter;
     return matchesJob && matchesStatus;
   }) : [];
 
-  // Calculate dashboard stats
   const dashboardStats = {
     activeJobListings: jobs?.filter(job => job.status === "active").length || 0,
     newApplications: applications?.filter(app => app.status === "submitted").length || 0,
@@ -260,7 +243,6 @@ const {
 
       <main className="flex-grow p-4">
         <div className="max-w-7xl mx-auto">
-          {/* Dashboard Overview */}
           <div className="bg-white rounded-lg shadow-md p-6 mb-8">
             <h1 className="text-2xl font-bold text-neutral-800 mb-6">Job Management Dashboard</h1>
             
@@ -292,7 +274,6 @@ const {
             </div>
           </div>
 
-          {/* Tabs */}
           <div className="bg-white rounded-lg shadow-md overflow-hidden mb-8">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <div className="border-b border-gray-200">
@@ -324,13 +305,11 @@ const {
                   </TabsList>
               </div>
 
-              {/* Tab Content: Job Listings */}
               <TabsContent value="jobListings" className="p-0">
   <div className="p-6 border-b border-gray-200">
     <div className="flex justify-between items-center flex-col sm:flex-row gap-3">
       <h2 className="text-xl font-semibold text-neutral-800">Your Job Listings</h2>
       <div className="flex space-x-2 items-center">
-        {/* Add Report Actions */}
         <ReportActions 
           reportTitle="7-Eleven Job Listings Report" 
           reportData={filteredJobs} 
@@ -362,7 +341,6 @@ const {
     </div>
   </div>
 
-                {/* Search Box */}
                 <div className="p-4 border-b border-gray-200">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
@@ -514,7 +492,6 @@ const {
                 </div>
               </TabsContent>
 
-              {/* Tab Content: Applications */}
               <TabsContent value="applications" className="p-0">
                 <div className="p-6 border-b border-gray-200">
                   <div className="flex justify-between items-center flex-col sm:flex-row gap-3">
@@ -572,12 +549,10 @@ const {
                     </div>
                   ) : (
                     filteredApplications.map((application) => {
-                      // Find the job this application is for
                       const job = jobs?.find(j => j.id === application.jobId);
                       
                       if (!job) return null;
                       
-                      // Create an enhanced application with job details
                       const enhancedApplication = {
                         ...application,
                         jobTitle: job.title,
@@ -585,7 +560,7 @@ const {
                       };
                       
                       return (
-                        <ApplicationCard
+                        <NewApplicationCard
                           key={application.id}
                           application={enhancedApplication}
                           jobTitle={job.title}
@@ -596,8 +571,7 @@ const {
                   )}
                 </div>
               </TabsContent>
-                  {/* Tab Content: Activities */}
-<TabsContent value="activities" className="p-0">
+                  <TabsContent value="activities" className="p-0">
   <div className="p-6">
     <div className="flex justify-between items-center mb-4">
       <h2 className="text-xl font-semibold text-neutral-800">Recent Activities</h2>
@@ -613,7 +587,6 @@ const {
       />
     </div>
     
-    {/* Activities list */}
     <div className="space-y-4 mt-6">
       {isActivitiesLoading ? (
         <div className="text-center py-8">
@@ -622,7 +595,7 @@ const {
         </div>
       ) : activities?.length ? (
         activities.map((activity) => (
-          <ActivityCard key={activity.id} activity={activity} />
+          <NewActivityCard key={activity.id} activity={activity} />
         ))
       ) : (
         <div className="text-center py-8 border border-dashed border-gray-300 rounded-md">
@@ -633,7 +606,6 @@ const {
   </div>
 </TabsContent>
 
-              {/* Tab Content: Create Job */}
               <TabsContent value="createJob" className="p-0">
                 <div className="p-6">
                   <h2 className="text-xl font-semibold text-neutral-800 mb-6">Create New Job Listing</h2>

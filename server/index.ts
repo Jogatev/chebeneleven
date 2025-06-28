@@ -1,212 +1,241 @@
-import express, { type Request, Response, NextFunction } from "express";
+import express, { type Express } from "express";
+import cors from "cors";
+import { createServer, type Server } from "http";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+import { setupSession } from "./session";
 import { setupFileUpload } from "./file-upload";
-import session from "express-session";
-import MemoryStore from "memorystore";
-import ConnectPgSimple from "connect-pg-simple";
-import { drizzle } from 'drizzle-orm/postgres-js';
+import { config } from "./config";
 import postgres from 'postgres';
-import { storage, setSessionStore } from "./unified-storage";
-import { sql } from 'drizzle-orm';
-import { 
-  users as usersTable, 
-  jobListings as jobListingsTable, 
-  applications as applicationsTable, 
-  activities as activitiesTable 
-} from "@shared/schema";
+import { drizzle } from 'drizzle-orm/postgres-js';
+import { migrate } from 'drizzle-orm/postgres-js/migrator';
+import { users, jobListings, applications, activities } from '@shared/schema';
+import { storage, setDatabaseConnection, setSessionStore } from './unified-storage';
+import createMemoryStore from "memorystore";
+import session from "express-session";
 
-// Export DB_TYPE so it can be imported in other files
-export const DB_TYPE = process.env.DB_TYPE || 'postgres';
+export const DB_TYPE = process.env.DB_TYPE || 'memory';
+
 export const DB_CONNECTION_STRING = process.env.DB_CONNECTION_STRING || 'postgresql://neondb_owner:npg_eFrPutD1n9dE@ep-aged-darkness-a1bh7bgl-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require';
-const SESSION_SECRET = process.env.SESSION_SECRET || 'seven-eleven-careers-secret';
 
-const app = express();
-//app.set('trust proxy', 1);
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-
-// Initialize database connection if using PostgreSQL
-let db = null;
-if (DB_TYPE === 'postgres') {
-  try {
-    // Create connection pool
-    console.log('Attempting to connect to PostgreSQL...');
-    const queryClient = postgres(DB_CONNECTION_STRING, {
-      ssl: 'require', // Needed for Neon.tech
-      max: 10, // Connection pool size
-      idle_timeout: 20, // How long a connection can be idle before being closed
-      connect_timeout: 30, // Connection timeout in seconds
-    });
-    
-    // Test the connection
-    queryClient`SELECT 1`.then(() => {
-      console.log('PostgreSQL connection test successful');
-      
-      // Test database tables after successful connection
-      if (db) {
-        console.log('Testing database tables...');
-        db.select({ count: sql`count(*)` }).from(usersTable)
-          .then(result => console.log('Users table count:', result))
-          .catch(error => console.error('Users table test failed:', error));
-        
-        db.select({ count: sql`count(*)` }).from(jobListingsTable)
-          .then(result => console.log('Jobs table count:', result))
-          .catch(error => console.error('Jobs table test failed:', error));
-      }
-    }).catch(error => {
-      console.error('PostgreSQL connection test failed:', error);
-    });
-    
-    // Create a drizzle instance
-    db = drizzle(queryClient);
-    log('PostgreSQL database connection initialized');
-  } catch (error) {
-    console.error('Failed to initialize PostgreSQL connection:', error);
-    log('Falling back to in-memory storage');
-  }
-}
-
-// Setup session with appropriate store
-const sessionConfig: session.SessionOptions = {
-  secret: SESSION_SECRET,
-  resave: false,
- // proxy: true,
-  saveUninitialized: false,
-  cookie: {
-    secure: false,
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    //sameSite: 'lax'
-  },
-};
-
-if (DB_TYPE === 'postgres') {
-  // Use PostgreSQL for session storage
-  const PgStore = ConnectPgSimple(session);
-  sessionConfig.store = new PgStore({
-    conString: DB_CONNECTION_STRING, // Use the connection string directly
-    tableName: 'sessions',
-    createTableIfMissing: true,
-    ssl: true
-  });
-  log('Using PostgreSQL for session storage');
-  
-  // Set the session store in the unified storage
-  setSessionStore(sessionConfig.store);
-} else {
-  // Use memory store
-  const MemStore = MemoryStore(session);
-  sessionConfig.store = new MemStore({
-    checkPeriod: 86400000, // prune expired entries every 24h
-  });
-  log('Using in-memory session storage');
-}
-
-app.use(session(sessionConfig));
-
-// Add request/response logging middleware
-app.use((req, res, next) => {
-  const start = Date.now();
-  const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
-
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
-
-      log(logLine);
-    }
-  });
-
-  next();
-});
-
-// Add error handling middleware for HTML responses
-app.use((req, res, next) => {
-  const originalSend = res.send;
-  
-  res.send = function(body) {
-    // Log all API responses for debugging
-    if (req.path.startsWith('/api')) {
-      console.log(`API Response for ${req.method} ${req.path}:`);
-      try {
-        // If it's a string that starts with <!DOCTYPE, it's HTML
-        if (typeof body === 'string' && body.startsWith('<!DOCTYPE')) {
-          console.error('HTML response being sent instead of JSON for', req.path);
-          console.error(body.substring(0, 200) + '...');
-        }
-      } catch (e) {
-        console.error('Error logging response:', e);
-      }
-    }
-    
-    return originalSend.call(this, body);
-  };
-  
-  next();
-});
-
-// Make DB available in the request object
 declare global {
   namespace Express {
     interface Request {
       db?: any;
+      drizzle?: any;
+      storage?: any;
     }
   }
 }
 
-// Add the database to the request object
-app.use((req, res, next) => {
-  if (db) {
-    req.db = db;
-  }
-  next();
-});
+export async function createApp(): Promise<{ app: Express; server: Server }> {
+  const app = express();
 
-(async () => {
-  // Set up file upload middleware
+  app.set('trust proxy', 1);
+
+  let db: any = null;
+  let drizzleDb: any = null;
+
+  if (DB_TYPE === 'postgres') {
+    const sql = postgres(DB_CONNECTION_STRING, {
+      ssl: 'require',
+      max: 10,
+      idle_timeout: 20,
+      connect_timeout: 30,
+    });
+
+    try {
+      await sql`SELECT 1`;
+      console.log('PostgreSQL connection successful');
+
+      await sql`
+        CREATE TABLE IF NOT EXISTS users (
+          id SERIAL PRIMARY KEY,
+          username TEXT NOT NULL UNIQUE,
+          password TEXT NOT NULL,
+          franchise_name TEXT NOT NULL,
+          franchisee_id TEXT NOT NULL UNIQUE,
+          location TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT NOW() NOT NULL
+        )
+      `;
+
+      await sql`
+        CREATE TABLE IF NOT EXISTS job_listings (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL,
+          title TEXT NOT NULL,
+          location TEXT NOT NULL,
+          description TEXT NOT NULL,
+          requirements TEXT NOT NULL,
+          job_type TEXT NOT NULL,
+          department TEXT,
+          pay_range TEXT,
+          benefits TEXT,
+          status TEXT NOT NULL DEFAULT 'active',
+          created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+          closing_date TIMESTAMP,
+          tags JSONB DEFAULT '[]'::jsonb
+        )
+      `;
+
+      await sql`
+        CREATE TABLE IF NOT EXISTS applications (
+          id SERIAL PRIMARY KEY,
+          job_id INTEGER NOT NULL,
+          reference_id TEXT NOT NULL UNIQUE,
+          first_name TEXT NOT NULL,
+          last_name TEXT NOT NULL,
+          email TEXT NOT NULL,
+          phone TEXT NOT NULL,
+          address TEXT,
+          city TEXT,
+          zip_code TEXT,
+          resume_url TEXT,
+          experience TEXT,
+          education TEXT,
+          cover_letter TEXT,
+          available_shifts JSONB,
+          work_availability JSONB,
+          start_date TIMESTAMP,
+          status TEXT NOT NULL DEFAULT 'submitted',
+          submitted_at TIMESTAMP DEFAULT NOW() NOT NULL
+        )
+      `;
+
+      await sql`
+        CREATE TABLE IF NOT EXISTS activities (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL,
+          action TEXT NOT NULL,
+          entity_type TEXT NOT NULL,
+          entity_id INTEGER NOT NULL,
+          details JSONB DEFAULT '{}'::jsonb,
+          timestamp TIMESTAMP DEFAULT NOW() NOT NULL
+        )
+      `;
+
+      drizzleDb = drizzle(sql);
+      db = { pool: sql, drizzle: drizzleDb };
+      setDatabaseConnection(db);
+
+      const sessionConfig = {
+        secret: config.auth.sessionSecret,
+        resave: false,
+        saveUninitialized: false,
+        cookie: {
+          secure: process.env.NODE_ENV === 'production',
+          httpOnly: true,
+          maxAge: 24 * 60 * 60 * 1000,
+        },
+        store: new (require('connect-pg-simple')(session))({
+          conString: DB_CONNECTION_STRING,
+          tableName: 'sessions',
+          createTableIfMissing: true,
+        }),
+      };
+
+      setSessionStore(sessionConfig.store);
+      app.use(session(sessionConfig));
+    } catch (error) {
+      console.error('PostgreSQL connection failed:', error);
+      console.log('Falling back to memory storage');
+      
+      const MemStore = createMemoryStore(session);
+      const sessionConfig = {
+        secret: config.auth.sessionSecret,
+        resave: false,
+        saveUninitialized: false,
+        cookie: {
+          secure: process.env.NODE_ENV === 'production',
+          httpOnly: true,
+          maxAge: 24 * 60 * 60 * 1000,
+        },
+        store: new MemStore({
+          checkPeriod: 86400000,
+        }),
+      };
+
+      setSessionStore(sessionConfig.store);
+      app.use(session(sessionConfig));
+    }
+  } else {
+    const MemStore = createMemoryStore(session);
+    const sessionConfig = {
+      secret: config.auth.sessionSecret,
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000,
+      },
+      store: new MemStore({
+        checkPeriod: 86400000,
+      }),
+    };
+
+    setSessionStore(sessionConfig.store);
+    app.use(session(sessionConfig));
+  }
+
+  app.use(cors(config.cors));
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+  app.use((req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+      const duration = Date.now() - start;
+      const method = req.method;
+      const url = req.url;
+      const status = res.statusCode;
+      const userAgent = req.get('User-Agent') || 'Unknown';
+      const ip = req.ip || req.connection.remoteAddress || 'Unknown';
+      
+      console.log(`${method} ${url} ${status} ${duration}ms - ${ip} - ${userAgent}`);
+    });
+    next();
+  });
+
+  app.use((err: any, req: any, res: any, next: any) => {
+    console.error('Error:', err);
+    if (res.headersSent) {
+      return next(err);
+    }
+    res.status(500).json({ error: 'Internal Server Error' });
+  });
+
+  app.use((req, res, next) => {
+    const originalSend = res.send;
+    res.send = function(data) {
+      if (typeof data === 'string' && data.startsWith('<!DOCTYPE')) {
+        console.log('Sending HTML response');
+      } else {
+        console.log('Sending JSON response');
+      }
+      return originalSend.call(this, data);
+    };
+    next();
+  });
+
+  app.use((req, res, next) => {
+    req.db = db;
+    req.drizzle = drizzleDb;
+    next();
+  });
+
+  app.use((req, res, next) => {
+    req.storage = storage;
+    next();
+  });
+
   setupFileUpload(app);
-  
+
   const server = await registerRoutes(app);
 
-  // Global error handler
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
-
-    res.status(status).json({ message });
-    throw err;
+  server.on('error', (error) => {
+    console.error('Server error:', error);
   });
 
-  if (app.get("env") === "development") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
-  }
-
-  const port = 5000;
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
-    log(`Server running on port ${port}`);
-    log(`Database type: ${DB_TYPE}`);
-    log(`Environment: ${app.get("env")}`);
-  });
-})();
+  return { app, server };
+}

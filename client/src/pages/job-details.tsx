@@ -18,6 +18,7 @@ import { useAuth } from "@/hooks/use-auth";
 import ApplicationCard from "@/components/application-card";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Loader2, Edit, Archive } from "lucide-react";
+import { API_ENDPOINTS, getFullApiPath } from "@shared/api-endpoints";
 
 export default function JobDetails() {
   const { user } = useAuth();
@@ -31,11 +32,11 @@ export default function JobDetails() {
     isLoading: jobLoading,
     error: jobError,
   } = useQuery<JobListing, Error>({
-    queryKey: ["/api/jobs", jobId],
+    queryKey: [getFullApiPath(API_ENDPOINTS.JOBS.GET_BY_ID(jobId))],
     queryFn: async ({ queryKey }) => {
-      const [, id] = queryKey;
+      const [, id] = queryKey as [string, string | number];
       try {
-        const response = await apiRequest("GET", `/api/jobs/${id}`);
+        const response = await apiRequest("GET", getFullApiPath(API_ENDPOINTS.JOBS.GET_BY_ID(id)));
         return await response.json();
       } catch (error) {
         console.error("Error fetching job:", error);
@@ -50,12 +51,11 @@ export default function JobDetails() {
     isLoading: applicationsLoading,
     error: applicationsError,
   } = useQuery<Application[], Error>({
-    queryKey: ["/api/jobs", jobId, "applications"],
+    queryKey: [getFullApiPath(API_ENDPOINTS.APPLICATIONS.GET_BY_JOB(jobId))],
     queryFn: async ({ queryKey }) => {
-      const [, id] = queryKey;
+      const [, id] = queryKey as [string, string | number];
       try {
-        // Use the new endpoint
-        const response = await apiRequest("GET", `/api/applications/job/${id}`);
+        const response = await apiRequest("GET", getFullApiPath(API_ENDPOINTS.APPLICATIONS.GET_BY_JOB(id)));
         return await response.json();
       } catch (error) {
         console.error("Error fetching applications:", error);
@@ -67,11 +67,11 @@ export default function JobDetails() {
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ applicationId, status }: { applicationId: number; status: string }) => {
-      const res = await apiRequest("PATCH", `/api/applications/${applicationId}`, { status });
+      const res = await apiRequest("PATCH", getFullApiPath(API_ENDPOINTS.APPLICATIONS.UPDATE(applicationId)), { status });
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId, "applications"] });
+      queryClient.invalidateQueries({ queryKey: [getFullApiPath(API_ENDPOINTS.APPLICATIONS.GET_BY_JOB(jobId))] });
       toast({
         title: "Status updated",
         description: "Application status has been updated successfully.",
@@ -194,7 +194,6 @@ export default function JobDetails() {
       <Edit size={16} /> Edit Job
     </Button>
     
-    {/* Add Archive button - only show if not already archived */}
     {job.status !== "archived" && (
       <Button
         variant="outline"
@@ -202,16 +201,16 @@ export default function JobDetails() {
         onClick={async () => {
           if (confirm(`Are you sure you want to archive the job "${job.title}"? It will no longer be visible to applicants.`)) {
             try {
-              await apiRequest("PATCH", `/api/jobs/${job.id}`, { status: "archived" });
+              await apiRequest("PATCH", getFullApiPath(API_ENDPOINTS.JOBS.UPDATE(job.id)), { status: "archived" });
               toast({
                 title: "Job Archived",
                 description: "The job has been archived successfully",
               });
-              queryClient.invalidateQueries({ queryKey: ["/api/jobs", job.id] });
-            } catch (error) {
+              queryClient.invalidateQueries({ queryKey: [getFullApiPath(API_ENDPOINTS.JOBS.GET_BY_ID(job.id))] });
+            } catch (error: unknown) {
               toast({
                 title: "Archive failed",
-                description: error.message,
+                description: error instanceof Error ? error.message : "Unknown error",
                 variant: "destructive",
               });
             }

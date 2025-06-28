@@ -5,17 +5,19 @@ import { setupAuth } from "./auth";
 import { insertJobListingSchema, insertApplicationSchema, insertActivitySchema } from "@shared/schema";
 import { fromZodError } from "zod-validation-error";
 import { sendApplicationConfirmation, sendStatusUpdateEmail } from "./email-service";
+import { config, getApiPath } from "./config";
+import { API_ENDPOINTS } from "@shared/api-endpoints";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   console.log("Starting route registration...");
   
-  app.get("/api/test", (req, res) => {
+  app.get(getApiPath(API_ENDPOINTS.TEST), (req, res) => {
     console.log("Test route accessed");
     res.json({ message: "Test route working!" });
   });
   setupAuth(app);
 
-app.get("/api/jobs", async (req, res) => {
+app.get(getApiPath(API_ENDPOINTS.JOBS.LIST), async (req, res) => {
   try {
     const jobs = await storage.getJobs();
     const activeJobs = jobs.filter(job => job.status === "active");
@@ -26,7 +28,7 @@ app.get("/api/jobs", async (req, res) => {
   }
 });
 
-app.post("/api/jobs/:id/archive", async (req, res) => {
+app.post(getApiPath(API_ENDPOINTS.JOBS.ARCHIVE(":id")), async (req, res) => {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ error: "Unauthorized" });
   }
@@ -39,20 +41,16 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
       return res.status(404).json({ error: "Job not found" });
     }
     
-    // Check if the authenticated user owns this job
     if (job.userId !== req.user.id) {
       return res.status(403).json({ error: "Forbidden: You do not own this job listing" });
     }
     
-    // Check if job is already archived
     if (job.status === "archived") {
       return res.status(400).json({ error: "Job is already archived" });
     }
     
-    // Archive the job
     const updatedJob = await storage.updateJob(jobId, { status: "archived" });
     
-    // Log the archive activity
     await storage.createActivity({
       userId: req.user.id,
       action: "updated_job_status",
@@ -72,8 +70,7 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
   }
 });
 
-  // Get job by ID (publicly accessible)
-  app.get("/api/jobs/:id", async (req, res) => {
+  app.get(getApiPath(API_ENDPOINTS.JOBS.GET_BY_ID(":id")), async (req, res) => {
     try {
       const jobId = parseInt(req.params.id);
       const job = await storage.getJobById(jobId);
@@ -89,8 +86,7 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
     }
   });
 
-  // Get jobs by franchisee (requires auth)
-  app.get("/api/my-jobs", async (req, res) => {
+  app.get(getApiPath(API_ENDPOINTS.JOBS.MY_JOBS), async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Unauthorized" });
     }
@@ -105,17 +101,14 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
     }
   });
 
-  // Create job listing (requires auth)
-  app.post("/api/jobs", async (req, res) => {
+  app.post(getApiPath(API_ENDPOINTS.JOBS.CREATE), async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
     try {
-      // Include the user ID from the authenticated user
       let jobData = { ...req.body, userId: req.user.id };
       
-      // Manual date conversion for closingDate if it's a string
       if (jobData.closingDate && typeof jobData.closingDate === 'string') {
         try {
           jobData.closingDate = new Date(jobData.closingDate);
@@ -124,7 +117,6 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
         }
       }
       
-      // Validate the job data
       const parseResult = insertJobListingSchema.safeParse(jobData);
       if (!parseResult.success) {
         const validationError = fromZodError(parseResult.error);
@@ -133,7 +125,6 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
       
       const job = await storage.createJob(parseResult.data);
 
-      // Log the activity with debugging
       console.log(`Logging job creation activity for user ${req.user.id}, job ${job.id}`);
       try {
         const activity = await storage.createActivity({
@@ -155,8 +146,7 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
     }
   });
 
-  // Update job listing (requires auth)
-  app.patch("/api/jobs/:id", async (req, res) => {
+  app.patch(getApiPath(API_ENDPOINTS.JOBS.UPDATE(":id")), async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Unauthorized" });
     }
@@ -169,14 +159,12 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
         return res.status(404).json({ error: "Job not found" });
       }
       
-      // Check if the authenticated user owns this job
       if (job.userId !== req.user.id) {
         return res.status(403).json({ error: "Forbidden: You do not own this job listing" });
       }
       
       const updatedJob = await storage.updateJob(jobId, req.body);
 
-      // Log the activity if status was updated
       if (req.body.status) {
         console.log(`Logging job status update activity: ${job.status} -> ${req.body.status}`);
         try {
@@ -195,7 +183,6 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
           console.error("Error logging status update activity:", activityError);
         }
       } 
-      // Log other updates
       else if (Object.keys(req.body).length > 0) {
         console.log(`Logging job update activity for fields: ${Object.keys(req.body).join(", ")}`);
         try {
@@ -206,7 +193,7 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
             entityId: jobId,
             details: { 
               jobTitle: updatedJob.title,
-              updatedFields: Object.keys(req.body).join(", ")
+              updatedFields: Object.keys(req.body)
             }
           });
         } catch (activityError) {
@@ -221,8 +208,7 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
     }
   });
 
-  // Delete job listing (requires auth)
-  app.delete("/api/jobs/:id", async (req, res) => {
+  app.delete(getApiPath(API_ENDPOINTS.JOBS.DELETE(":id")), async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Unauthorized" });
     }
@@ -235,12 +221,10 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
         return res.status(404).json({ error: "Job not found" });
       }
       
-      // Check if the authenticated user owns this job
       if (job.userId !== req.user.id) {
         return res.status(403).json({ error: "Forbidden: You do not own this job listing" });
       }
       
-      // Log the activity before deleting the job
       console.log(`Logging job deletion activity for job ${jobId}`);
       try {
         await storage.createActivity({
@@ -265,41 +249,32 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
     }
   });
 
-  // Applications Routes
-  // Submit a job application (publicly accessible)
-  app.post("/api/applications", async (req, res) => {
+  app.post(getApiPath(API_ENDPOINTS.APPLICATIONS.CREATE), async (req, res) => {
     try {
-      // Validate the application data
       const parseResult = insertApplicationSchema.safeParse(req.body);
       if (!parseResult.success) {
         const validationError = fromZodError(parseResult.error);
         return res.status(400).json({ error: validationError.message });
       }
       
-      // Check if the job exists
       const job = await storage.getJobById(parseResult.data.jobId);
       if (!job) {
         return res.status(404).json({ error: "Job not found" });
       }
       
-      // Check if the job is still active
       if (job.status !== "active") {
         return res.status(400).json({ error: "This job is no longer accepting applications" });
       }
       
-      // Application will automatically get a reference ID in storage.createApplication
       const application = await storage.createApplication(parseResult.data);
       console.log("Application created successfully:", application);
       
-      // Double check that the application was stored properly
       const allApplications = await storage.getApplications();
       console.log(`Total applications in storage: ${allApplications.length}`);
       
-      // Send confirmation email with the reference ID
       let emailResult = null;
       try {
         if (application.email) {
-          // Make sure we have job details
           const jobDetails = await storage.getJobById(application.jobId);
           if (jobDetails) {
             emailResult = await sendApplicationConfirmation(
@@ -313,7 +288,6 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
           console.log("No email provided for application, skipping confirmation email");
         }
         
-        // Log activity for the job owner (franchisee)
         console.log(`Logging application received activity for user ${job.userId}`);
         try {
           await storage.createActivity({
@@ -332,10 +306,8 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
         
       } catch (emailError) {
         console.error("Error sending confirmation email:", emailError);
-        // Don't fail the request if email fails
       }
       
-      // Include email status in response
       res.status(201).json({
         ...application,
         notificationSent: emailResult?.success || false
@@ -347,8 +319,7 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
     }
   });
 
-  // Get applications for a franchisee (requires auth)
-  app.get("/api/my-applications", async (req, res) => {
+  app.get(getApiPath(API_ENDPOINTS.APPLICATIONS.MY_APPLICATIONS), async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Unauthorized" });
     }
@@ -357,7 +328,6 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
       const userId = req.user.id;
       console.log(`Getting applications for user ${userId}`);
       
-      // Get all jobs for this user
       const userJobs = await storage.getJobsByUserId(userId);
       console.log(`User has ${userJobs.length} job listings:`, userJobs.map(j => j.id));
       
@@ -368,7 +338,6 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
       
       const userJobIds = userJobs.map(job => job.id);
       
-      // Get all applications directly
       const allApplications = await storage.getApplications();
       console.log(`Total applications in system: ${allApplications.length}`);
       
@@ -377,24 +346,21 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
         return res.json([]);
       }
       
-      // Direct matching algorithm instead of using getApplicationsForUser
       const matchedApplications = [];
       
       for (const app of allApplications) {
-        // Ensure jobId is a number for comparison
         const appJobId = typeof app.jobId === 'string' ? parseInt(app.jobId) : app.jobId;
         
         console.log(`Checking application ${app.id} for job ${appJobId}, user jobs: [${userJobIds.join(',')}]`);
         
         if (userJobIds.includes(appJobId)) {
           console.log(`Match found: Application ${app.id} matches job ${appJobId}`);
-          // Ensure application has a status
           if (!app.status) {
             app.status = 'submitted';
           }
           matchedApplications.push({
             ...app,
-            jobId: appJobId // Ensure jobId is a number
+            jobId: appJobId
           });
         }
       }
@@ -405,7 +371,6 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
         return res.json([]);
       }
       
-      // Add job details to each application
       const applicationsWithJobDetails = await Promise.all(
         matchedApplications.map(async (app) => {
           const job = await storage.getJobById(app.jobId);
@@ -424,8 +389,7 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
     }
   });
 
-  // Get applications for a specific job (requires auth)
-  app.get("/api/applications/job/:jobId", async (req, res) => {
+  app.get(getApiPath(API_ENDPOINTS.APPLICATIONS.JOB(":jobId")), async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Unauthorized" });
     }
@@ -438,15 +402,12 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
         return res.status(404).json({ error: "Job not found" });
       }
       
-      // Check if the authenticated user owns this job
       if (job.userId !== req.user.id) {
         return res.status(403).json({ error: "Forbidden: You do not own this job listing" });
       }
       
-      // Get applications for this job
       const allApplications = await storage.getApplications();
       const jobApplications = allApplications.filter(app => {
-        // Ensure jobId is a number for comparison
         const appJobId = typeof app.jobId === 'string' ? parseInt(app.jobId) : app.jobId;
         return appJobId === jobId;
       });
@@ -460,8 +421,7 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
     }
   });
 
-  // Get application by ID (requires auth)
-  app.get("/api/applications/:id", async (req, res) => {
+  app.get(getApiPath(API_ENDPOINTS.APPLICATIONS.GET(":id")), async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Unauthorized" });
     }
@@ -474,7 +434,6 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
         return res.status(404).json({ error: "Application not found" });
       }
       
-      // Check if the authenticated user owns the job this application is for
       const job = await storage.getJobById(application.jobId);
       if (!job || job.userId !== req.user.id) {
         return res.status(403).json({ error: "Forbidden: You do not own this job listing" });
@@ -487,8 +446,7 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
     }
   });
 
-  // Update application status (requires auth)
-  app.patch("/api/applications/:id", async (req, res) => {
+  app.patch(getApiPath(API_ENDPOINTS.APPLICATIONS.UPDATE(":id")), async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Unauthorized" });
     }
@@ -501,7 +459,6 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
         return res.status(404).json({ error: "Application not found" });
       }
       
-      // Check if the authenticated user owns the job this application is for
       const job = await storage.getJobById(application.jobId);
       if (!job || job.userId !== req.user.id) {
         return res.status(403).json({ error: "Forbidden: You do not own this job listing" });
@@ -510,7 +467,6 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
       console.log(`Updating application ${applicationId} with data:`, req.body);
       const { status } = req.body;
       
-      // Validate status (only status updates supported for now)
       if (!status) {
         return res.status(400).json({ error: "Status is required" });
       }
@@ -525,7 +481,6 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
       const previousStatus = application.status || "submitted";
       const updatedApplication = await storage.updateApplication(applicationId, { status });
       
-      // Log the activity
       console.log(`Logging application status update activity: ${previousStatus} -> ${status}`);
       try {
         await storage.createActivity({
@@ -544,7 +499,6 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
         console.error("Error logging status update activity:", activityError);
       }
       
-      // Send status update email to applicant
       let emailResult = null;
       try {
         if (application.email) {
@@ -558,7 +512,6 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
         }
       } catch (emailError) {
         console.error("Error sending status update email:", emailError);
-        // Don't fail the request if email fails
       }
       
       res.json({
@@ -571,9 +524,7 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
     }
   });
 
-  // Activities routes
-  // Get activities for a franchisee (requires auth)
-  app.get("/api/my-activities", async (req, res) => {
+  app.get(getApiPath(API_ENDPOINTS.ACTIVITIES.MY_ACTIVITIES), async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Unauthorized" });
     }
@@ -582,10 +533,9 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
       const userId = req.user.id;
       const activities = await storage.getActivitiesByUserId(userId);
       
-      // Sort activities by createdAt descending (newest first)
       activities.sort((a, b) => {
-        const dateA = new Date(a.createdAt || 0).getTime();
-        const dateB = new Date(b.createdAt || 0).getTime();
+        const dateA = new Date(a.timestamp || 0).getTime();
+        const dateB = new Date(b.timestamp || 0).getTime();
         return dateB - dateA;
       });
       
@@ -596,17 +546,14 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
     }
   });
 
-  // Create an activity log (requires auth)
-  app.post("/api/activities", async (req, res) => {
+  app.post(getApiPath(API_ENDPOINTS.ACTIVITIES.CREATE), async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
     try {
-      // Include the user ID from the authenticated user
       const activityData = { ...req.body, userId: req.user.id };
       
-      // Validate the activity data
       const parseResult = insertActivitySchema.safeParse(activityData);
       if (!parseResult.success) {
         const validationError = fromZodError(parseResult.error);
@@ -621,7 +568,6 @@ app.post("/api/jobs/:id/archive", async (req, res) => {
     }
   });
 
-  // Start the server
   const server = createServer(app);
   return server;
-}
+} 

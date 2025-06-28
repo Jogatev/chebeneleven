@@ -1,36 +1,20 @@
-import { db } from './connection';
-import { 
-  users as usersTable, 
-  jobListings as jobListingsTable, 
-  applications as applicationsTable, 
-  activities as activitiesTable,
-  type User, 
-  type JobListing, 
-  type Application, 
-  type Activity, 
-  type InsertUser, 
-  type InsertJobListing, 
-  type InsertApplication, 
-  type InsertActivity 
-} from "@shared/schema";
-import { eq, and, desc } from 'drizzle-orm';
-import { v4 as uuidv4 } from 'uuid';
-import { sql } from 'drizzle-orm';
-
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+import { eq, desc, inArray } from 'drizzle-orm';
+import { users as usersTable, jobListings as jobListingsTable, applications as applicationsTable, activities as activitiesTable } from '@shared/schema';
+import type { User, InsertUser, JobListing, InsertJobListing, Application, InsertApplication, Activity, InsertActivity } from '@shared/schema';
 import { IStorage } from './storage';
 import createMemoryStore from "memorystore";
 import session from "express-session";
 
-// Create the memory store for sessions
 const MemoryStore = createMemoryStore(session);
 
-// Export the storage class
 export class PostgresStorage implements IStorage {
   sessionStore: any;
 
   constructor() {
     console.log('PostgresStorage constructor called');
-    this.sessionStore = null; // This will be set from index.ts
+    this.sessionStore = null;
   }
 
   setSessionStore(store: any) {
@@ -38,7 +22,6 @@ export class PostgresStorage implements IStorage {
     this.sessionStore = store;
   }
 
-  // User methods
   async getUser(id: number): Promise<User | undefined> {
     try {
       console.log(`Getting user ${id} from PostgreSQL`);
@@ -87,7 +70,6 @@ export class PostgresStorage implements IStorage {
     }
   }
 
-  // Job methods
   async getJobs(): Promise<JobListing[]> {
     try {
       console.log('Getting all jobs from PostgreSQL');
@@ -165,7 +147,6 @@ export class PostgresStorage implements IStorage {
     }
   }
 
-  // Application methods
   async getApplications(): Promise<Application[]> {
     try {
       console.log('Getting all applications from PostgreSQL');
@@ -204,7 +185,6 @@ export class PostgresStorage implements IStorage {
 
   async getApplicationsForUser(userId: number): Promise<Application[]> {
     try {
-      // Get all jobs by this user
       console.log(`Getting applications for user ${userId} from PostgreSQL`);
       const jobs = await this.getJobsByUserId(userId);
       const jobIds = jobs.map(job => job.id);
@@ -214,7 +194,6 @@ export class PostgresStorage implements IStorage {
         return [];
       }
       
-      // Get applications for these jobs
       const applications = await db.select().from(applicationsTable).where(
         applicationsTable.jobId.in(jobIds)
       );
@@ -228,13 +207,16 @@ export class PostgresStorage implements IStorage {
 
   async createApplication(insertApplication: InsertApplication): Promise<Application> {
     try {
-      console.log('Creating application in PostgreSQL');
+      console.log('Creating application in PostgreSQL:', JSON.stringify(insertApplication));
       const referenceId = this.generateReferenceId();
-      const applications = await db
-        .insert(applicationsTable)
-        .values({ ...insertApplication, referenceId })
-        .returning();
-      console.log('Application created in PostgreSQL');
+      const applicationData = {
+        ...insertApplication,
+        referenceId,
+        jobId: typeof insertApplication.jobId === 'string' ? parseInt(insertApplication.jobId) : insertApplication.jobId,
+      };
+      
+      const applications = await db.insert(applicationsTable).values(applicationData).returning();
+      console.log('Application created in PostgreSQL:', JSON.stringify(applications[0]));
       return applications[0];
     } catch (error) {
       console.error('PostgreSQL error in createApplication:', error);
@@ -244,7 +226,7 @@ export class PostgresStorage implements IStorage {
 
   async updateApplication(id: number, updateData: Partial<Application>): Promise<Application | undefined> {
     try {
-      console.log(`Updating application ${id} in PostgreSQL`);
+      console.log(`Updating application ${id} in PostgreSQL:`, JSON.stringify(updateData));
       const applications = await db
         .update(applicationsTable)
         .set(updateData)
@@ -258,13 +240,12 @@ export class PostgresStorage implements IStorage {
     }
   }
 
-  // Notes methods
   async saveApplicationNote(applicationId: number, note: string): Promise<boolean> {
     try {
       console.log(`Saving note for application ${applicationId} in PostgreSQL`);
       await db
         .update(applicationsTable)
-        .set({ notes: note })
+        .set({ coverLetter: note })
         .where(eq(applicationsTable.id, applicationId));
       console.log('Note saved in PostgreSQL');
       return true;
@@ -273,24 +254,25 @@ export class PostgresStorage implements IStorage {
       throw error;
     }
   }
-  
+
   async getApplicationNote(applicationId: number): Promise<string | undefined> {
     try {
       console.log(`Getting note for application ${applicationId} from PostgreSQL`);
-      const application = await this.getApplicationById(applicationId);
-      console.log(`Note found: ${application?.notes ? 'yes' : 'no'}`);
-      return application?.notes;
+      const applications = await db.select({ coverLetter: applicationsTable.coverLetter })
+        .from(applicationsTable)
+        .where(eq(applicationsTable.id, applicationId));
+      console.log('Note retrieved from PostgreSQL');
+      return applications[0]?.coverLetter || undefined;
     } catch (error) {
       console.error('PostgreSQL error in getApplicationNote:', error);
       throw error;
     }
   }
 
-  // Activity methods
   async getActivities(): Promise<Activity[]> {
     try {
       console.log('Getting all activities from PostgreSQL');
-      const activities = await db.select().from(activitiesTable);
+      const activities = await db.select().from(activitiesTable).orderBy(desc(activitiesTable.timestamp));
       console.log(`Retrieved ${activities.length} activities from PostgreSQL`);
       return activities;
     } catch (error) {
@@ -302,9 +284,7 @@ export class PostgresStorage implements IStorage {
   async getActivitiesByUserId(userId: number): Promise<Activity[]> {
     try {
       console.log(`Getting activities for user ${userId} from PostgreSQL`);
-      const activities = await db.select().from(activitiesTable)
-        .where(eq(activitiesTable.userId, userId))
-        .orderBy(desc(activitiesTable.timestamp));
+      const activities = await db.select().from(activitiesTable).where(eq(activitiesTable.userId, userId));
       console.log(`Retrieved ${activities.length} activities for user ${userId} from PostgreSQL`);
       return activities;
     } catch (error) {
@@ -315,9 +295,9 @@ export class PostgresStorage implements IStorage {
 
   async createActivity(insertActivity: InsertActivity): Promise<Activity> {
     try {
-      console.log('Creating activity in PostgreSQL');
+      console.log('Creating activity in PostgreSQL:', JSON.stringify(insertActivity));
       const activities = await db.insert(activitiesTable).values(insertActivity).returning();
-      console.log('Activity created in PostgreSQL');
+      console.log('Activity created in PostgreSQL:', JSON.stringify(activities[0]));
       return activities[0];
     } catch (error) {
       console.error('PostgreSQL error in createActivity:', error);
@@ -325,24 +305,21 @@ export class PostgresStorage implements IStorage {
     }
   }
 
-  // Helper method
   private generateReferenceId(): string {
     const year = new Date().getFullYear();
-    const randomPart = uuidv4().substring(0, 5).toUpperCase();
-    return `SEV-${year}-${randomPart}`;
+    const randomString = Math.random().toString(36).substring(2, 7).toUpperCase();
+    return `SEV-${year}-${randomString}`;
   }
 }
 
-// Export a single instance of the storage
-export const storage = new PostgresStorage();
+let db: any = null;
 
-// Export functions to be called from index.ts
 export function setDatabaseConnection(dbConnection: any) {
-  console.log('setDatabaseConnection called');
-  // Nothing to do as we're using the imported 'db' directly
+  db = dbConnection;
 }
 
 export function setSessionStore(store: any) {
-  console.log('setSessionStore called');
   storage.setSessionStore(store);
 }
+
+export const storage = new PostgresStorage(); 

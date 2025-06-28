@@ -1,75 +1,69 @@
-import { useState } from "react";
-import { useLocation, useParams } from "wouter";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format } from "date-fns";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { type JobListing } from "@shared/schema";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/utils";
+import { getFullApiPath } from "@/lib/utils";
+import { API_ENDPOINTS } from "@shared/api-endpoints";
+import { JobListing } from "@shared/schema";
 import Header from "@/components/header";
-import { 
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-  FormDescription
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, Upload, FileText, Calendar, MapPin, DollarSign } from "lucide-react";
 import FileUpload from "@/components/file-upload";
+import { useToast } from "@/hooks/use-toast";
 
-// Application form schema
 const applicationSchema = z.object({
-  firstName: z.string().min(1, "First name is required"),
-  lastName: z.string().min(1, "Last name is required"),
-  email: z.string().email("Invalid email address"),
+  firstName: z.string().min(2, "First name is required"),
+  lastName: z.string().min(2, "Last name is required"),
+  email: z.string().email("Valid email is required"),
   phone: z.string().min(10, "Phone number is required"),
-  address: z.string().optional(),
-  city: z.string().optional(),
-  zipCode: z.string().optional(),
-  resumeUrl: z.string().optional(),
-  experience: z.string(),
-  education: z.string(),
-  coverLetter: z.string().optional(),
-  availableShifts: z.array(z.string()),
-  startDate: z.string().optional(),
-  desiredPay: z.string().optional(),
-  certify: z.boolean().refine(val => val === true, {
-    message: "You must certify that the information is accurate"
+  address: z.string().min(5, "Address is required"),
+  city: z.string().min(2, "City is required"),
+  zipCode: z.string().min(4, "ZIP code is required"),
+  experience: z.string().min(10, "Please describe your experience"),
+  education: z.string().min(10, "Please describe your education"),
+  coverLetter: z.string().min(20, "Cover letter is required"),
+  availableShifts: z.array(z.string()).min(1, "Select at least one shift"),
+  workAvailability: z.object({
+    holidayWork: z.boolean(),
+    weekdayWork: z.boolean(),
+    weekendWork: z.boolean(),
+    morningShift: z.boolean(),
+    afternoonShift: z.boolean(),
+    nightShift: z.boolean(),
   }),
+  startDate: z.string().min(1, "Start date is required"),
+  resumeUrl: z.string().optional(),
+  certify: z.boolean().refine(val => val === true, "You must certify the information"),
 });
 
 type ApplicationFormValues = z.infer<typeof applicationSchema>;
 
 export default function ApplicationForm() {
-  const params = useParams<{ id: string }>();
-  const jobId = parseInt(params.id);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [jobId, setJobId] = useState<number | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  // Fetch job details
-  const { data: job, isLoading: isJobLoading, error: jobError } = useQuery<JobListing>({
-    queryKey: [`/api/jobs/${jobId}`],
+  const {
+    data: job,
+    isLoading: isJobLoading,
+    error: jobError
+  } = useQuery<JobListing>({
+    queryKey: [getFullApiPath(API_ENDPOINTS.JOBS.GET_BY_ID(jobId || ""))],
+    enabled: !!jobId,
   });
 
-  // Form definition
   const form = useForm<ApplicationFormValues>({
     resolver: zodResolver(applicationSchema),
     defaultValues: {
@@ -80,82 +74,94 @@ export default function ApplicationForm() {
       address: "",
       city: "",
       zipCode: "",
-      experience: "less_than_1",
-      education: "high_school",
+      experience: "",
+      education: "",
       coverLetter: "",
-      resumeUrl: "",
       availableShifts: [],
+      workAvailability: {
+        holidayWork: false,
+        weekdayWork: false,
+        weekendWork: false,
+        morningShift: false,
+        afternoonShift: false,
+        nightShift: false,
+      },
       startDate: format(new Date(), "yyyy-MM-dd"),
-      desiredPay: "",
+      resumeUrl: "",
       certify: false,
     },
   });
 
-  // Handle application submission
-  const applicationMutation = useMutation({
-    mutationFn: async (applicationData: any) => {
-      const res = await apiRequest("POST", "/api/applications", applicationData);
+  const submitApplicationMutation = useMutation({
+    mutationFn: async (data: ApplicationFormValues) => {
+      const res = await apiRequest("POST", getFullApiPath(API_ENDPOINTS.APPLICATIONS.CREATE), {
+        ...data,
+        jobId: jobId,
+      });
       return res.json();
     },
     onSuccess: () => {
       toast({
         title: "Application Submitted",
-        description: "Your application has been successfully submitted.",
+        description: "Your application has been successfully submitted. You will receive a confirmation email shortly.",
       });
-      // Redirect back to jobs page after successful submission
-      setTimeout(() => {
-        setLocation("/applicant");
-      }, 2000);
+      setLocation("/applicant");
     },
     onError: (error) => {
       toast({
-        title: "Submission Failed",
-        description: error.message || "There was an error submitting your application. Please try again.",
+        title: "Error",
+        description: error.message || "There was an error submitting your application",
         variant: "destructive",
       });
-      setIsSubmitting(false);
     },
   });
 
-  const onSubmit = (data: ApplicationFormValues) => {
-    setIsSubmitting(true);
-    
-    // Prepare data for submission - remove certify field and add jobId
-    const { certify, ...submissionData } = data;
-    
-    applicationMutation.mutate({
+  const handleSubmit = (data: ApplicationFormValues) => {
+    const submissionData = {
+      ...data,
+      jobId: jobId,
+    };
+
+    const shiftArray = Object.entries(data.workAvailability)
+      .filter(([_, value]) => value)
+      .map(([key, _]) => key);
+
+    const formattedData = {
       ...submissionData,
-      jobId,
-      // Convert shift array to proper format
-      availableShifts: data.availableShifts,
-      // Format date properly
-      startDate: data.startDate ? new Date(data.startDate) : undefined,
-    });
+      availableShifts: shiftArray,
+      startDate: new Date(data.startDate).toISOString(),
+    };
+
+    submitApplicationMutation.mutate(formattedData);
   };
 
-  // Handle back to jobs
   const handleBackToJobs = () => {
     setLocation("/applicant");
   };
 
-  // Available shifts options
-  const shiftOptions = [
-    { id: "morning", label: "Morning (6am-2pm)" },
-    { id: "afternoon", label: "Afternoon (2pm-10pm)" },
-    { id: "night", label: "Night (10pm-6am)" },
-    { id: "weekends", label: "Weekends" },
+  const availableShifts = [
+    { value: "morning", label: "Morning (6 AM - 2 PM)" },
+    { value: "afternoon", label: "Afternoon (2 PM - 10 PM)" },
+    { value: "night", label: "Night (10 PM - 6 AM)" },
   ];
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("jobId");
+    if (id) {
+      setJobId(parseInt(id));
+    }
+  }, []);
 
   if (isJobLoading) {
     return (
       <div className="min-h-screen flex flex-col">
-        <Header 
-          showBackButton={true} 
-          onBackClick={handleBackToJobs} 
-          backText="Back to Jobs"
-        />
-        <main className="flex-grow flex items-center justify-center p-4">
-          <Loader2 className="h-12 w-12 animate-spin text-[#00703c]" />
+        <Header showBackButton={true} onBackClick={handleBackToJobs} />
+        <main className="flex-grow flex items-center justify-center">
+          <div className="flex items-center space-x-2">
+            <Loader2 className="h-6 w-6 animate-spin" />
+            <span>Loading job details...</span>
+          </div>
         </main>
       </div>
     );
@@ -164,16 +170,12 @@ export default function ApplicationForm() {
   if (jobError || !job) {
     return (
       <div className="min-h-screen flex flex-col">
-        <Header 
-          showBackButton={true} 
-          onBackClick={handleBackToJobs} 
-          backText="Back to Jobs"
-        />
-        <main className="flex-grow p-4">
-          <div className="max-w-3xl mx-auto bg-white rounded-lg shadow-md p-6">
-            <h1 className="text-2xl font-bold text-red-600">Error Loading Job</h1>
-            <p className="mt-2">The job listing could not be found or there was an error loading it.</p>
-            <Button onClick={handleBackToJobs} className="mt-4">Return to Job Listings</Button>
+        <Header showBackButton={true} onBackClick={handleBackToJobs} />
+        <main className="flex-grow flex items-center justify-center">
+          <div className="text-center">
+            <h2 className="text-xl font-semibold text-red-600 mb-2">Job Not Found</h2>
+            <p className="text-gray-600 mb-4">The job you're looking for doesn't exist or has been removed.</p>
+            <Button onClick={handleBackToJobs}>Back to Jobs</Button>
           </div>
         </main>
       </div>
@@ -182,490 +184,417 @@ export default function ApplicationForm() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Header 
-        showBackButton={true} 
-        onBackClick={handleBackToJobs} 
-        backText="Back to Jobs"
-      />
+      <Header showBackButton={true} onBackClick={handleBackToJobs} />
+      
+      <main className="flex-grow p-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-neutral-800 mb-2">Apply for Position</h1>
+            <p className="text-gray-600">Complete the form below to submit your application</p>
+          </div>
 
-      <main className="flex-grow p-3 sm:p-4">
-        <div className="max-w-3xl mx-auto">
-          <div className="bg-white rounded-lg shadow-md overflow-hidden mb-6 sm:mb-8">
-            <div className="p-4 sm:p-6 bg-[#00703c] text-white">
-              <h1 className="text-xl sm:text-2xl font-bold">{job.title}</h1>
-              <p className="mt-1 text-sm sm:text-base">7-Eleven - {job.location}</p>
-            </div>
-            
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="p-4 sm:p-6 space-y-4 sm:space-y-6">
-                {/* Personal Information */}
-                <div className="border-b border-gray-200 pb-4 sm:pb-6">
-                  <h2 className="text-lg sm:text-xl font-semibold text-neutral-800 mb-3 sm:mb-4">Personal Information</h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                    <FormField
-                      control={form.control}
-                      name="firstName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-sm sm:text-base">First Name*</FormLabel>
-                          <FormControl>
-                            <Input 
-                              {...field} 
-                              className="h-10 sm:h-11 px-3" 
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="lastName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-sm sm:text-base">Last Name*</FormLabel>
-                          <FormControl>
-                            <Input 
-                              {...field} 
-                              className="h-10 sm:h-11 px-3" 
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="email"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-sm sm:text-base">Email Address*</FormLabel>
-                          <FormControl>
-                            <Input 
-                              type="email" 
-                              inputMode="email" 
-                              autoComplete="email" 
-                              {...field} 
-                              className="h-10 sm:h-11 px-3" 
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="phone"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-sm sm:text-base">Phone Number*</FormLabel>
-                          <FormControl>
-                            <Input 
-                              type="tel" 
-                              inputMode="tel" 
-                              autoComplete="tel" 
-                              {...field} 
-                              className="h-10 sm:h-11 px-3" 
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="address"
-                      render={({ field }) => (
-                        <FormItem className="col-span-1 sm:col-span-2">
-                          <FormLabel className="text-sm sm:text-base">Address</FormLabel>
-                          <FormControl>
-                            <Input 
-                              {...field} 
-                              autoComplete="street-address" 
-                              className="h-10 sm:h-11 px-3" 
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="city"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-sm sm:text-base">City/Municipality</FormLabel>
-                          <FormControl>
-                            <Input 
-                              {...field} 
-                              autoComplete="address-level2" 
-                              placeholder="City or municipality in Philippines"
-                              className="h-10 sm:h-11 px-3" 
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="zipCode"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-sm sm:text-base">Postal Code</FormLabel>
-                          <FormControl>
-                            <Input 
-                              {...field} 
-                              inputMode="numeric" 
-                              autoComplete="postal-code"
-                              placeholder="Philippine postal code"
-                              className="h-10 sm:h-11 px-3" 
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-
-                {/* Experience & Qualifications */}
-                <div className="border-b border-gray-200 pb-4 sm:pb-6">
-                  <h2 className="text-lg sm:text-xl font-semibold text-neutral-800 mb-3 sm:mb-4">Experience & Qualifications</h2>
-                  <div className="space-y-3 sm:space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="resumeUrl"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-sm sm:text-base">Resume/CV Upload</FormLabel>
-                          <FormControl>
-                            <FileUpload
-                              accept="application/pdf,.doc,.docx"
-                              maxSize={5}
-                              isUploading={isUploading}
-                              onFileUpload={(file) => {
-                                // Show uploading state
-                                setIsUploading(true);
-                                
-                                // Upload the file
-                                const formData = new FormData();
-                                formData.append("resume", file);
-                                
-                                fetch("/api/upload-resume", {
-                                  method: "POST",
-                                  body: formData,
-                                })
-                                  .then((response) => {
-                                    if (!response.ok) {
-                                      throw new Error("Upload failed");
-                                    }
-                                    return response.json();
-                                  })
-                                  .then((data) => {
-                                    // Set the resume URL field with the returned path
-                                    field.onChange(data.path);
-                                    toast({
-                                      title: "Upload Successful",
-                                      description: "Your resume has been uploaded successfully.",
-                                    });
-                                  })
-                                  .catch((error) => {
-                                    console.error("Upload error:", error);
-                                    toast({
-                                      title: "Upload Failed",
-                                      description: "There was an error uploading your resume. Please try again.",
-                                      variant: "destructive",
-                                    });
-                                  })
-                                  .finally(() => {
-                                    setIsUploading(false);
-                                  });
-                              }}
-                              onFileUploadError={(error) => {
-                                toast({
-                                  title: "Upload Failed",
-                                  description: error,
-                                  variant: "destructive",
-                                });
-                              }}
-                              value={field.value}
-                              onChange={field.onChange}
-                            />
-                          </FormControl>
-                          <FormDescription className="text-xs sm:text-sm">
-                            Upload your resume (PDF, DOC, or DOCX format, max 5MB)
-                            <span className="block sm:hidden mt-1 text-xs text-muted-foreground italic">
-                              Tap to select file or take a photo of your document
-                            </span>
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                      <FormField
-                        control={form.control}
-                        name="experience"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-sm sm:text-base">Years of Relevant Experience</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
-                              <FormControl>
-                                <SelectTrigger className="h-10 sm:h-11">
-                                  <SelectValue placeholder="Select experience" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="less_than_1">Less than 1 year</SelectItem>
-                                <SelectItem value="1-2">1-2 years</SelectItem>
-                                <SelectItem value="3-5">3-5 years</SelectItem>
-                                <SelectItem value="5+">5+ years</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
+          <div className="grid lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Application Form</CardTitle>
+                  <CardDescription>
+                    Please fill out all required fields to complete your application
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="firstName">First Name *</Label>
+                        <Input
+                          id="firstName"
+                          {...form.register("firstName")}
+                          className="mt-1"
+                        />
+                        {form.formState.errors.firstName && (
+                          <p className="text-red-500 text-sm mt-1">{form.formState.errors.firstName.message}</p>
                         )}
-                      />
-
-                      <FormField
-                        control={form.control}
-                        name="education"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-sm sm:text-base">Highest Education Level</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
-                              <FormControl>
-                                <SelectTrigger className="h-10 sm:h-11">
-                                  <SelectValue placeholder="Select education" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="high_school">High School</SelectItem>
-                                <SelectItem value="some_college">Some College</SelectItem>
-                                <SelectItem value="associates">Associate's Degree</SelectItem>
-                                <SelectItem value="bachelors">Bachelor's Degree</SelectItem>
-                                <SelectItem value="masters">Master's Degree or higher</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
+                      </div>
+                      <div>
+                        <Label htmlFor="lastName">Last Name *</Label>
+                        <Input
+                          id="lastName"
+                          {...form.register("lastName")}
+                          className="mt-1"
+                        />
+                        {form.formState.errors.lastName && (
+                          <p className="text-red-500 text-sm mt-1">{form.formState.errors.lastName.message}</p>
                         )}
-                      />
+                      </div>
                     </div>
 
-                    <FormField
-                      control={form.control}
-                      name="coverLetter"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-sm sm:text-base">Cover Letter or Additional Information</FormLabel>
-                          <FormControl>
-                            <Textarea 
-                              rows={3}
-                              placeholder="Tell us why you're a good fit for this position..."
-                              className="min-h-[100px] sm:min-h-[120px]"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-
-                {/* Availability & Preferences */}
-                <div className="border-b border-gray-200 pb-4 sm:pb-6">
-                  <h2 className="text-lg sm:text-xl font-semibold text-neutral-800 mb-3 sm:mb-4">Availability & Preferences</h2>
-                  <div className="space-y-3 sm:space-y-4">
-                    <div className="space-y-4">
+                    <div className="grid md:grid-cols-2 gap-4">
                       <div>
-                        <h3 className="text-sm sm:text-base font-medium mb-2">Work Availability*</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <FormField
-                              control={form.control}
-                              name="workAvailability.holidayWork"
-                              render={({ field }) => (
-                                <FormItem className="flex items-center space-x-2">
-                                  <FormControl>
-                                    <Checkbox
-                                      checked={field.value}
-                                      onCheckedChange={field.onChange}
-                                    />
-                                  </FormControl>
-                                  <FormLabel className="text-sm font-normal">
-                                    Holiday Work
-                                  </FormLabel>
-                                </FormItem>
-                              )}
+                        <Label htmlFor="email">Email *</Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          {...form.register("email")}
+                          className="mt-1"
+                        />
+                        {form.formState.errors.email && (
+                          <p className="text-red-500 text-sm mt-1">{form.formState.errors.email.message}</p>
+                        )}
+                      </div>
+                      <div>
+                        <Label htmlFor="phone">Phone *</Label>
+                        <Input
+                          id="phone"
+                          {...form.register("phone")}
+                          className="mt-1"
+                        />
+                        {form.formState.errors.phone && (
+                          <p className="text-red-500 text-sm mt-1">{form.formState.errors.phone.message}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="address">Address *</Label>
+                      <Input
+                        id="address"
+                        {...form.register("address")}
+                        className="mt-1"
+                      />
+                      {form.formState.errors.address && (
+                        <p className="text-red-500 text-sm mt-1">{form.formState.errors.address.message}</p>
+                      )}
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="city">City *</Label>
+                        <Input
+                          id="city"
+                          {...form.register("city")}
+                          className="mt-1"
+                        />
+                        {form.formState.errors.city && (
+                          <p className="text-red-500 text-sm mt-1">{form.formState.errors.city.message}</p>
+                        )}
+                      </div>
+                      <div>
+                        <Label htmlFor="zipCode">ZIP Code *</Label>
+                        <Input
+                          id="zipCode"
+                          {...form.register("zipCode")}
+                          className="mt-1"
+                        />
+                        {form.formState.errors.zipCode && (
+                          <p className="text-red-500 text-sm mt-1">{form.formState.errors.zipCode.message}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="experience">Work Experience *</Label>
+                      <Textarea
+                        id="experience"
+                        {...form.register("experience")}
+                        placeholder="Describe your relevant work experience..."
+                        className="mt-1"
+                        rows={4}
+                      />
+                      {form.formState.errors.experience && (
+                        <p className="text-red-500 text-sm mt-1">{form.formState.errors.experience.message}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <Label htmlFor="education">Education *</Label>
+                      <Textarea
+                        id="education"
+                        {...form.register("education")}
+                        placeholder="Describe your educational background..."
+                        className="mt-1"
+                        rows={3}
+                      />
+                      {form.formState.errors.education && (
+                        <p className="text-red-500 text-sm mt-1">{form.formState.errors.education.message}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <Label htmlFor="coverLetter">Cover Letter *</Label>
+                      <Textarea
+                        id="coverLetter"
+                        {...form.register("coverLetter")}
+                        placeholder="Tell us why you're interested in this position..."
+                        className="mt-1"
+                        rows={5}
+                      />
+                      {form.formState.errors.coverLetter && (
+                        <p className="text-red-500 text-sm mt-1">{form.formState.errors.coverLetter.message}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <Label>Available Shifts *</Label>
+                      <div className="mt-2 space-y-2">
+                        {availableShifts.map((shift) => (
+                          <div key={shift.value} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={shift.value}
+                              checked={form.watch("availableShifts").includes(shift.value)}
+                              onCheckedChange={(checked) => {
+                                const current = form.watch("availableShifts");
+                                if (checked) {
+                                  form.setValue("availableShifts", [...current, shift.value]);
+                                } else {
+                                  form.setValue("availableShifts", current.filter(s => s !== shift.value));
+                                }
+                              }}
                             />
-                            
-                            <FormField
-                              control={form.control}
-                              name="workAvailability.weekdayWork"
-                              render={({ field }) => (
-                                <FormItem className="flex items-center space-x-2">
-                                  <FormControl>
-                                    <Checkbox
-                                      checked={field.value}
-                                      onCheckedChange={field.onChange}
-                                    />
-                                  </FormControl>
-                                  <FormLabel className="text-sm font-normal">
-                                    Weekday Work (Mon-Fri)
-                                  </FormLabel>
-                                </FormItem>
-                              )}
-                            />
-                            
-                            <FormField
-                              control={form.control}
-                              name="workAvailability.weekendWork"
-                              render={({ field }) => (
-                                <FormItem className="flex items-center space-x-2">
-                                  <FormControl>
-                                    <Checkbox
-                                      checked={field.value}
-                                      onCheckedChange={field.onChange}
-                                    />
-                                  </FormControl>
-                                  <FormLabel className="text-sm font-normal">
-                                    Weekend Work
-                                  </FormLabel>
-                                </FormItem>
-                              )}
-                            />
+                            <Label htmlFor={shift.value} className="text-sm font-normal">
+                              {shift.label}
+                            </Label>
                           </div>
-                          
-                          <div className="space-y-2">
-                            <FormField
-                              control={form.control}
-                              name="workAvailability.morningShift"
-                              render={({ field }) => (
-                                <FormItem className="flex items-center space-x-2">
-                                  <FormControl>
-                                    <Checkbox
-                                      checked={field.value}
-                                      onCheckedChange={field.onChange}
-                                    />
-                                  </FormControl>
-                                  <FormLabel className="text-sm font-normal">
-                                    Morning Shift (6am-2pm)
-                                  </FormLabel>
-                                </FormItem>
-                              )}
+                        ))}
+                      </div>
+                      {form.formState.errors.availableShifts && (
+                        <p className="text-red-500 text-sm mt-1">{form.formState.errors.availableShifts.message}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <Label>Work Availability</Label>
+                      <div className="mt-2 grid md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id="holidayWork"
+                              {...form.register("workAvailability.holidayWork")}
                             />
-                            
-                            <FormField
-                              control={form.control}
-                              name="workAvailability.afternoonShift"
-                              render={({ field }) => (
-                                <FormItem className="flex items-center space-x-2">
-                                  <FormControl>
-                                    <Checkbox
-                                      checked={field.value}
-                                      onCheckedChange={field.onChange}
-                                    />
-                                  </FormControl>
-                                  <FormLabel className="text-sm font-normal">
-                                    Afternoon Shift (2pm-10pm)
-                                  </FormLabel>
-                                </FormItem>
-                              )}
+                            <Label htmlFor="holidayWork" className="text-sm font-normal">
+                              Available on holidays
+                            </Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id="weekdayWork"
+                              {...form.register("workAvailability.weekdayWork")}
                             />
-                            
-                            <FormField
-                              control={form.control}
-                              name="workAvailability.nightShift"
-                              render={({ field }) => (
-                                <FormItem className="flex items-center space-x-2">
-                                  <FormControl>
-                                    <Checkbox
-                                      checked={field.value}
-                                      onCheckedChange={field.onChange}
-                                    />
-                                  </FormControl>
-                                  <FormLabel className="text-sm font-normal">
-                                    Night Shift (10pm-6am)
-                                  </FormLabel>
-                                </FormItem>
-                              )}
+                            <Label htmlFor="weekdayWork" className="text-sm font-normal">
+                              Available weekdays
+                            </Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id="weekendWork"
+                              {...form.register("workAvailability.weekendWork")}
                             />
+                            <Label htmlFor="weekendWork" className="text-sm font-normal">
+                              Available weekends
+                            </Label>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id="morningShift"
+                              {...form.register("workAvailability.morningShift")}
+                            />
+                            <Label htmlFor="morningShift" className="text-sm font-normal">
+                              Morning shifts
+                            </Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id="afternoonShift"
+                              {...form.register("workAvailability.afternoonShift")}
+                            />
+                            <Label htmlFor="afternoonShift" className="text-sm font-normal">
+                              Afternoon shifts
+                            </Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id="nightShift"
+                              {...form.register("workAvailability.nightShift")}
+                            />
+                            <Label htmlFor="nightShift" className="text-sm font-normal">
+                              Night shifts
+                            </Label>
                           </div>
                         </div>
                       </div>
+                    </div>
 
-                      <FormField
-                        control={form.control}
-                        name="startDate"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-sm sm:text-base">Earliest Start Date</FormLabel>
-                            <FormControl>
-                              <Input 
-                                type="date" 
-                                className="h-10 sm:h-11 px-3"
-                                {...field} 
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
+                    <div>
+                      <Label htmlFor="startDate">Earliest Start Date *</Label>
+                      <Input
+                        id="startDate"
+                        type="date"
+                        {...form.register("startDate")}
+                        className="mt-1"
                       />
+                      {form.formState.errors.startDate && (
+                        <p className="text-red-500 text-sm mt-1">{form.formState.errors.startDate.message}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <Label>Resume Upload</Label>
+                      <div className="mt-2">
+                        {isUploading ? (
+                          <div className="flex items-center space-x-2 text-blue-600">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span>Uploading...</span>
+                          </div>
+                        ) : (
+                          <FileUpload
+                            onFileUpload={async (file) => {
+                              setIsUploading(true);
+                              try {
+                                const formData = new FormData();
+                                formData.append("resume", file);
+                                
+                                const response = await fetch("/api/upload-resume", {
+                                  method: "POST",
+                                  body: formData,
+                                });
+                                
+                                if (!response.ok) {
+                                  throw new Error("Upload failed");
+                                }
+                                
+                                const result = await response.json();
+                                form.setValue("resumeUrl", result.filePath);
+                                toast({
+                                  title: "Resume Uploaded",
+                                  description: "Your resume has been successfully uploaded",
+                                });
+                              } catch (error) {
+                                toast({
+                                  title: "Upload Failed",
+                                  description: "There was an error uploading your resume",
+                                  variant: "destructive",
+                                });
+                              } finally {
+                                setIsUploading(false);
+                              }
+                            }}
+                            acceptedFiles={[".pdf", ".doc", ".docx"]}
+                            maxSize={5}
+                          />
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="certify"
+                        {...form.register("certify")}
+                      />
+                      <Label htmlFor="certify" className="text-sm">
+                        I certify that all information provided is true and accurate *
+                      </Label>
+                    </div>
+                    {form.formState.errors.certify && (
+                      <p className="text-red-500 text-sm">{form.formState.errors.certify.message}</p>
+                    )}
+
+                    <div className="flex justify-end space-x-4">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleBackToJobs}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="submit"
+                        disabled={submitApplicationMutation.isPending}
+                      >
+                        {submitApplicationMutation.isPending ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                            Submitting...
+                          </>
+                        ) : (
+                          "Submit Application"
+                        )}
+                      </Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="lg:col-span-1">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Job Details</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <h3 className="font-semibold text-lg">{job.title}</h3>
+                    <div className="flex items-center text-gray-600 mt-1">
+                      <MapPin className="h-4 w-4 mr-1" />
+                      {job.location}
                     </div>
                   </div>
-                </div>
 
-                <FormField
-                  control={form.control}
-                  name="certify"
-                  render={({ field }) => (
-                    <FormItem className="flex items-start sm:items-center space-x-2 my-3 sm:my-4">
-                      <FormControl>
-                        <Checkbox
-                          className="h-5 w-5 sm:h-4 sm:w-4 mt-0.5 sm:mt-0"
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                      <FormLabel className="text-sm font-normal">
-                        I certify that the information provided is accurate and complete*
-                      </FormLabel>
-                      <FormMessage className="mt-0" />
-                    </FormItem>
+                  <div>
+                    <h4 className="font-medium mb-2">Job Type</h4>
+                    <Badge variant="secondary">{job.jobType}</Badge>
+                  </div>
+
+                  {job.department && (
+                    <div>
+                      <h4 className="font-medium mb-2">Department</h4>
+                      <p className="text-gray-600">{job.department}</p>
+                    </div>
                   )}
-                />
 
-                <div className="flex justify-center sm:justify-end">
-                  <Button 
-                    type="submit" 
-                    className="bg-[#ff7a00] hover:bg-orange-600 w-full sm:w-auto h-12 sm:h-11 text-base"
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                        Submitting...
-                      </>
-                    ) : (
-                      "Submit Application"
-                    )}
-                  </Button>
-                </div>
-              </form>
-            </Form>
+                  {job.payRange && (
+                    <div>
+                      <h4 className="font-medium mb-2">Pay Range</h4>
+                      <div className="flex items-center text-gray-600">
+                        <DollarSign className="h-4 w-4 mr-1" />
+                        {job.payRange}
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <h4 className="font-medium mb-2">Description</h4>
+                    <p className="text-gray-600 text-sm">{job.description}</p>
+                  </div>
+
+                  <div>
+                    <h4 className="font-medium mb-2">Requirements</h4>
+                    <p className="text-gray-600 text-sm">{job.requirements}</p>
+                  </div>
+
+                  {job.benefits && (
+                    <div>
+                      <h4 className="font-medium mb-2">Benefits</h4>
+                      <p className="text-gray-600 text-sm">{job.benefits}</p>
+                    </div>
+                  )}
+
+                  {job.closingDate && (
+                    <div>
+                      <h4 className="font-medium mb-2">Closing Date</h4>
+                      <div className="flex items-center text-gray-600">
+                        <Calendar className="h-4 w-4 mr-1" />
+                        {format(new Date(job.closingDate), "MMM dd, yyyy")}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </div>
       </main>
     </div>
   );
-}
+} 
